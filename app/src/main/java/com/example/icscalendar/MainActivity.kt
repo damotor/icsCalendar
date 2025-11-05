@@ -471,7 +471,6 @@ fun MonthGrid(yearMonth: YearMonth, events: List<VEvent>, onDayClick: (LocalDate
                 // Events list
                 LazyColumn {
                     items(sortedEvents) { event ->
-                        val isAllDay = event.dateStart.parameters.get("VALUE")?.contains("DATE") == true
                         val text = event.summary?.value ?: "-"
                         Text(
                             text = text,
