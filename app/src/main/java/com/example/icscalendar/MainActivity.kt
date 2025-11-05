@@ -3,16 +3,17 @@ package com.example.icscalendar
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,7 +30,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -63,6 +66,7 @@ import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 import java.util.TimeZone
+import androidx.core.net.toUri
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -195,7 +199,7 @@ fun CalendarApp(modifier: Modifier = Modifier) {
     fun requestPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-            intent.data = Uri.parse("package:${context.packageName}")
+            intent.data = "package:${context.packageName}".toUri()
             settingsLauncher.launch(intent)
         }
         // Note: For simplicity, this example omits the logic for older permissions.
@@ -260,6 +264,11 @@ fun CalendarApp(modifier: Modifier = Modifier) {
 
 @Composable
 fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit) {
+    // *** Add this BackHandler to intercept the system back button press ***
+    BackHandler {
+        onBack()
+    }
+
     val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
     // Use getOccurrenceStart and filter out nulls
     val eventsForDay = events.mapNotNull { event ->
@@ -273,13 +282,9 @@ fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit) {
     }
     // Sort the timed events by their specific start time for that day
     val sortedEvents = allDayEvents.map { it.first } + timedEvents.sortedBy { it.second }.map { it.first }
-    // The ClipboardManager is no longer needed here
 
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Button(onClick = onBack) {
-                Text("Back")
-            }
             Text(
                 text = date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG)),
                 modifier = Modifier.padding(16.dp)
@@ -358,7 +363,11 @@ fun MonthHeader(yearMonth: YearMonth, onMonthChange: (YearMonth) -> Unit) {
         modifier = Modifier.padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Button(onClick = { onMonthChange(yearMonth.minusMonths(1)) }) {
+        Button(onClick = { onMonthChange(yearMonth.minusMonths(1)) },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color.LightGray,
+                contentColor = Color.DarkGray
+            )) {
             Text("<")
         }
         Text(
@@ -369,7 +378,11 @@ fun MonthHeader(yearMonth: YearMonth, onMonthChange: (YearMonth) -> Unit) {
             textAlign = TextAlign.Center,
             fontWeight = FontWeight.Bold
         )
-        Button(onClick = { onMonthChange(yearMonth.plusMonths(1)) }) {
+        Button(onClick = { onMonthChange(yearMonth.plusMonths(1)) },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color.LightGray,
+                contentColor = Color.DarkGray
+            )) {
             Text(">")
         }
     }
@@ -380,7 +393,7 @@ fun DaysOfWeek() {
     Row {
         // DayOfWeek enum starts with MONDAY (index 0) and ends with SUNDAY (index 6).
         // To start the week on Monday, we can just use the natural order of the enum values.
-        val days = DayOfWeek.values()
+        val days = DayOfWeek.entries.toTypedArray()
 
         for (day in days) {
             Text(
@@ -408,11 +421,11 @@ fun MonthGrid(yearMonth: YearMonth, events: List<VEvent>, onDayClick: (LocalDate
     val gridEndDate = lastOfMonth.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY))
 
     val dayCount = ChronoUnit.DAYS.between(gridStartDate, gridEndDate).toInt() + 1
-    val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
     LazyVerticalGrid(columns = GridCells.Fixed(7)) {
         items(dayCount) { i ->
             val date = gridStartDate.plusDays(i.toLong())
+            val isToday = date.isEqual(LocalDate.now())
 
             // Get events with their specific start times for the current day
             val eventsForDay = events.mapNotNull { event ->
@@ -429,31 +442,42 @@ fun MonthGrid(yearMonth: YearMonth, events: List<VEvent>, onDayClick: (LocalDate
             // Sort timed events by their start time, then combine with all-day events
             val sortedEvents = allDayEvents.map { it.first } + timedEvents.sortedBy { it.second }.map { it.first }
 
-
-            // Determine color for text: grey for days outside the current month, otherwise black
-            val textColor = if (date.monthValue != yearMonth.monthValue) Color.Gray else Color.LightGray
+            // Determine color for text: grey for days outside the current month
+            val dayNumberColor = if (date.monthValue != yearMonth.monthValue) Color.DarkGray else Color.LightGray
 
             Column(
                 modifier = Modifier
-                    .height(120.dp) // Increased height for better visibility
+                    .height(120.dp)
                     .border(0.5.dp, Color.LightGray)
-                    .padding(4.dp)
                     .clickable { onDayClick(date) }
+                    .padding(4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally // Center the day number
             ) {
+                // Day number with highlighting for today
                 Text(
                     text = "${date.dayOfMonth}",
-                    color = textColor,
-                    fontWeight = if (date.isEqual(LocalDate.now())) FontWeight.Bold else FontWeight.Normal
+                    modifier = if (isToday) {
+                        Modifier
+                            .background(Color.LightGray, CircleShape)
+                            .padding(4.dp) // Padding inside the circle
+                    } else {
+                        Modifier
+                    },
+                    // Use white text for today's date to make it readable on the red background
+                    color = if (isToday) Color.DarkGray else dayNumberColor,
+                    fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal
                 )
-                // Use a LazyColumn for events to handle overflow gracefully
+
+                // Events list
                 LazyColumn {
                     items(sortedEvents) { event ->
+                        val isAllDay = event.dateStart.parameters.get("VALUE")?.contains("DATE") == true
                         val text = event.summary?.value ?: "-"
                         Text(
                             text = text,
                             maxLines = 1,
-                            color = textColor,
-                            fontSize = 12.sp // Slightly smaller font for events
+                            color = dayNumberColor, // Event text color matches the day's month status
+                            fontSize = 12.sp
                         )
                     }
                 }
