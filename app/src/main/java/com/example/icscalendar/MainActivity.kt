@@ -442,8 +442,8 @@ fun MonthGrid(yearMonth: YearMonth, events: List<VEvent>, onDayClick: (LocalDate
             // Sort timed events by their start time, then combine with all-day events
             val sortedEvents = allDayEvents.map { it.first } + timedEvents.sortedBy { it.second }.map { it.first }
 
-            // Determine color for text: grey for days outside the current month
-            val dayNumberColor = if (date.monthValue != yearMonth.monthValue) Color.DarkGray else Color.LightGray
+            // Determine color for text: gray for days outside the current month
+            val dayNumberColor = if (date.monthValue != yearMonth.monthValue) Color.Gray else Color.LightGray
 
             Column(
                 modifier = Modifier
