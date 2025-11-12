@@ -256,14 +256,15 @@ fun CalendarApp(modifier: Modifier = Modifier) {
             DayView(
                 date = selectedDate!!,
                 events = events,
-                onBack = { selectedDate = null }
+                onBack = { selectedDate = null },
+                onDateChange = { selectedDate = it }
             )
         }
     }
 }
 
 @Composable
-fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit) {
+fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit, onDateChange: (LocalDate) -> Unit) {
     // *** Add this BackHandler to intercept the system back button press ***
     BackHandler {
         onBack()
@@ -284,11 +285,33 @@ fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit) {
     val sortedEvents = allDayEvents.map { it.first } + timedEvents.sortedBy { it.second }.map { it.first }
 
     Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp, horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Button(onClick = { onDateChange(date.minusDays(1)) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.LightGray,
+                    contentColor = Color.DarkGray
+                )) {
+                Text("<")
+            }
             Text(
                 text = date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG)),
-                modifier = Modifier.padding(16.dp)
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.clickable { onDateChange(LocalDate.now()) }
             )
+            Button(onClick = { onDateChange(date.plusDays(1)) },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color.LightGray,
+                contentColor = Color.DarkGray
+            )) {
+            Text(">")
+        }
         }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
