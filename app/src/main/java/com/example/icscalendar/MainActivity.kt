@@ -17,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -29,8 +30,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Scaffold
@@ -51,6 +52,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import biweekly.Biweekly
 import biweekly.component.VEvent
 import com.example.icscalendar.ui.theme.ICSCalendarTheme
@@ -66,7 +68,6 @@ import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 import java.util.TimeZone
-import androidx.core.net.toUri
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -82,7 +83,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-fun VEvent.getOccurrenceStart(date: LocalDate): java.time.LocalDateTime? {val dtStartProp = dateStart ?: return null
+fun VEvent.getOccurrenceStart(date: LocalDate): java.time.LocalDateTime? {
+    val dtStartProp = dateStart ?: return null
     val systemZoneId = java.time.ZoneId.systemDefault()
     val isAllDay = dtStartProp.parameters.get("VALUE")?.contains("DATE") == true
 
@@ -162,6 +164,7 @@ fun CalendarApp(modifier: Modifier = Modifier) {
     var events by remember { mutableStateOf<List<VEvent>>(emptyList()) }
     var yearMonth by remember { mutableStateOf(YearMonth.now()) }
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
     val context = LocalContext.current
 
     // Check for MANAGE_EXTERNAL_STORAGE permission
@@ -210,6 +213,7 @@ fun CalendarApp(modifier: Modifier = Modifier) {
     // Automatically try to load the file when permission is granted
     LaunchedEffect(permissionGranted) {
         if (permissionGranted) {
+            isLoading = true
             try {
                 val file = File(Environment.getExternalStorageDirectory(), "Calendar.ics")
                 if (file.exists()) {
@@ -220,38 +224,49 @@ fun CalendarApp(modifier: Modifier = Modifier) {
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+            } finally {
+                isLoading = false
             }
+        } else {
+            isLoading = false
         }
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        if (selectedDate == null) {
-            if (permissionGranted) {
-                CalendarView(
-                    events = events,
-                    yearMonth = yearMonth,
-                    onMonthChange = { yearMonth = it },
-                    onDayClick = { selectedDate = it }
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Loading...", color = Color.White)
+            }
+        } else if (!permissionGranted) {
+            // Show a screen to explain why the permission is needed
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    "This app needs 'All Files Access' to read the Calendar.ics file from your device's storage. Please grant the permission on the next screen.",
+                    textAlign = TextAlign.Center
                 )
-            } else {
-                // Show a screen to explain why the permission is needed
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        "This app needs 'All Files Access' to read the Calendar.ics file from your device's storage. Please grant the permission on the next screen.",
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = { requestPermission() }) {
-                        Text("Grant Permission")
-                    }
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = { requestPermission() }) {
+                    Text("Grant Permission")
                 }
             }
+        } else if (selectedDate == null) {
+            CalendarView(
+                events = events,
+                yearMonth = yearMonth,
+                onMonthChange = { yearMonth = it },
+                onDayClick = { selectedDate = it }
+            )
         } else {
             DayView(
                 date = selectedDate!!,
@@ -292,11 +307,13 @@ fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit, onDateCha
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Button(onClick = { onDateChange(date.minusDays(1)) },
+            Button(
+                onClick = { onDateChange(date.minusDays(1)) },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color.LightGray,
                     contentColor = Color.DarkGray
-                )) {
+                )
+            ) {
                 Text("<")
             }
             Text(
@@ -305,13 +322,15 @@ fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit, onDateCha
                 textAlign = TextAlign.Center,
                 modifier = Modifier.clickable { onDateChange(LocalDate.now()) }
             )
-            Button(onClick = { onDateChange(date.plusDays(1)) },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color.LightGray,
-                contentColor = Color.DarkGray
-            )) {
-            Text(">")
-        }
+            Button(
+                onClick = { onDateChange(date.plusDays(1)) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.LightGray,
+                    contentColor = Color.DarkGray
+                )
+            ) {
+                Text(">")
+            }
         }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -333,7 +352,8 @@ fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit, onDateCha
                         // --- Event Header (Time and Summary) ---
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (!isAllDay) {
-                                val eventDateTime = event.dateStart.value.toInstant().atZone(java.time.ZoneId.systemDefault())
+                                val eventDateTime = event.dateStart.value.toInstant()
+                                    .atZone(java.time.ZoneId.systemDefault())
                                 Text(
                                     text = "${eventDateTime.format(timeFormatter)} ",
                                     fontWeight = FontWeight.Bold
@@ -372,7 +392,12 @@ fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit, onDateCha
 
 
 @Composable
-fun CalendarView(events: List<VEvent>, yearMonth: YearMonth, onMonthChange: (YearMonth) -> Unit, onDayClick: (LocalDate) -> Unit) {
+fun CalendarView(
+    events: List<VEvent>,
+    yearMonth: YearMonth,
+    onMonthChange: (YearMonth) -> Unit,
+    onDayClick: (LocalDate) -> Unit
+) {
     Column {
         MonthHeader(yearMonth = yearMonth, onMonthChange = onMonthChange)
         DaysOfWeek()
@@ -386,11 +411,13 @@ fun MonthHeader(yearMonth: YearMonth, onMonthChange: (YearMonth) -> Unit) {
         modifier = Modifier.padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Button(onClick = { onMonthChange(yearMonth.minusMonths(1)) },
+        Button(
+            onClick = { onMonthChange(yearMonth.minusMonths(1)) },
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color.LightGray,
                 contentColor = Color.DarkGray
-            )) {
+            )
+        ) {
             Text("<")
         }
         Text(
@@ -401,11 +428,13 @@ fun MonthHeader(yearMonth: YearMonth, onMonthChange: (YearMonth) -> Unit) {
             textAlign = TextAlign.Center,
             fontWeight = FontWeight.Bold
         )
-        Button(onClick = { onMonthChange(yearMonth.plusMonths(1)) },
+        Button(
+            onClick = { onMonthChange(yearMonth.plusMonths(1)) },
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color.LightGray,
                 contentColor = Color.DarkGray
-            )) {
+            )
+        ) {
             Text(">")
         }
     }
@@ -432,7 +461,6 @@ fun DaysOfWeek() {
 }
 
 
-
 @Composable
 fun MonthGrid(yearMonth: YearMonth, events: List<VEvent>, onDayClick: (LocalDate) -> Unit) {
     // Determine the start date: the Monday of the week containing the 1st of the month.
@@ -452,8 +480,8 @@ fun MonthGrid(yearMonth: YearMonth, events: List<VEvent>, onDayClick: (LocalDate
 
             // Get events with their specific start times for the current day
             val eventsForDay = events.mapNotNull { event ->
-                event.getOccurrenceStart(date)?.let { startTime ->
-                    Pair(event, startTime)
+                event.getOccurrenceStart(date)?.let {
+                    Pair(event, it)
                 }
             }
 
@@ -507,7 +535,6 @@ fun MonthGrid(yearMonth: YearMonth, events: List<VEvent>, onDayClick: (LocalDate
         }
     }
 }
-
 
 
 @Preview(showBackground = true)
