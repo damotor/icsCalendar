@@ -1,3 +1,4 @@
+// Copyright (c) 2024 Daniel Monedero-Tortola
 package com.example.icscalendar
 
 import org.junit.Test

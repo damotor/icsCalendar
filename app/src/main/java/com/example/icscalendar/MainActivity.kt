@@ -1,8 +1,7 @@
-// Copyright (c) 2025 Daniel Monedero-Tortola
+// Copyright (c) 2024 Daniel Monedero-Tortola
 package com.example.icscalendar
 
 import android.Manifest
-import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -36,7 +35,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -224,11 +222,12 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
         if (permissionGranted) {
             isLoading = true
             try {
-                val file = File(Environment.getExternalStorageDirectory(), "Calendar.ics")
+                val documentsFolder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+                val file = File(documentsFolder, "Calendar.ics")
                 if (file.exists()) {
                     FileInputStream(file).use { inputStream ->
-                        val ical = Biweekly.parse(inputStream).first()
-                        events = ical.events
+                        val iCal = Biweekly.parse(inputStream).first()
+                        events = iCal.events
                     }
                 }
             } catch (e: Exception) {
@@ -245,13 +244,13 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
         if (events.isNotEmpty()) {
             createNotificationChannel(context)
             val today = LocalDate.now()
-            val todaysEventsWithTimes = events.mapNotNull { event ->
+            val todayEventsWithTimes = events.mapNotNull { event ->
                 event.getOccurrenceStart(today)?.let { startTime ->
                     Pair(event, startTime)
                 }
             }
-            if (todaysEventsWithTimes.isNotEmpty()) {
-                showEventsNotification(context, todaysEventsWithTimes)
+            if (todayEventsWithTimes.isNotEmpty()) {
+                showEventsNotification(context, todayEventsWithTimes)
             }
         }
     }
@@ -565,6 +564,6 @@ fun MonthGrid(yearMonth: YearMonth, events: List<VEvent>, onDayClick: (LocalDate
 @Composable
 fun CalendarAppPreview() {
     ICSCalendarTheme {
-        CalendarApp(intent = (LocalContext.current as Activity).intent)
+        CalendarApp(intent = Intent())
     }
 }
