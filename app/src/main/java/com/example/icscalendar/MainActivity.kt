@@ -1,6 +1,8 @@
+// Copyright (c) 2025 Daniel Monedero-Tortola
 package com.example.icscalendar
 
 import android.Manifest
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -77,7 +79,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             ICSCalendarTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    CalendarApp(modifier = Modifier.padding(innerPadding))
+                    CalendarApp(
+                        modifier = Modifier.padding(innerPadding),
+                        intent = intent
+                    )
                 }
             }
         }
@@ -161,10 +166,13 @@ fun VEvent.getOccurrenceStart(date: LocalDate): java.time.LocalDateTime? {
 
 
 @Composable
-fun CalendarApp(modifier: Modifier = Modifier) {
+fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
     var events by remember { mutableStateOf<List<VEvent>>(emptyList()) }
     var yearMonth by remember { mutableStateOf(YearMonth.now()) }
-    var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
+    val initialDate = remember {
+        intent.getStringExtra("dateToShow")?.let { LocalDate.parse(it) }
+    }
+    var selectedDate by remember { mutableStateOf(initialDate) }
     var isLoading by remember { mutableStateOf(true) }
     val context = LocalContext.current
 
@@ -230,6 +238,21 @@ fun CalendarApp(modifier: Modifier = Modifier) {
             }
         } else {
             isLoading = false
+        }
+    }
+
+    LaunchedEffect(events) {
+        if (events.isNotEmpty()) {
+            createNotificationChannel(context)
+            val today = LocalDate.now()
+            val todaysEventsWithTimes = events.mapNotNull { event ->
+                event.getOccurrenceStart(today)?.let { startTime ->
+                    Pair(event, startTime)
+                }
+            }
+            if (todaysEventsWithTimes.isNotEmpty()) {
+                showEventsNotification(context, todaysEventsWithTimes)
+            }
         }
     }
 
@@ -542,6 +565,6 @@ fun MonthGrid(yearMonth: YearMonth, events: List<VEvent>, onDayClick: (LocalDate
 @Composable
 fun CalendarAppPreview() {
     ICSCalendarTheme {
-        CalendarApp()
+        CalendarApp(intent = (LocalContext.current as Activity).intent)
     }
 }

@@ -1,3 +1,4 @@
+// Copyright (c) 2025 Daniel Monedero-Tortola
 package com.example.icscalendar.ui.theme
 
 import android.app.Activity
