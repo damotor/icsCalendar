@@ -69,12 +69,15 @@ import java.time.format.TextStyle
 import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
-import java.util.TimeZone
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        
+        createNotificationChannel(this)
+        WorkScheduler.scheduleDailyWork(this)
+        
         setContent {
             ICSCalendarTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
@@ -88,82 +91,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-fun VEvent.getOccurrenceStart(date: LocalDate): java.time.LocalDateTime? {
-    val dtStartProp = dateStart ?: return null
-    val systemZoneId = java.time.ZoneId.systemDefault()
-    val isAllDay = dtStartProp.parameters.get("VALUE")?.contains("DATE") == true
-
-    val rruleValue = recurrenceRule?.value
-
-    // If it's a non-recurring event
-    if (rruleValue == null) {
-        val eventStartDateTime = dtStartProp.value.toInstant().atZone(systemZoneId)
-        val eventStartDate = eventStartDateTime.toLocalDate()
-        val dtEndProp = dateEnd
-        if (dtEndProp == null) {
-            return if (eventStartDate == date) eventStartDateTime.toLocalDateTime() else null
-        }
-        val eventEndDateTime = dtEndProp.value.toInstant().atZone(systemZoneId)
-        val eventEndDate = eventEndDateTime.toLocalDate()
-
-        val occurs = if (!isAllDay) {
-            !date.isBefore(eventStartDate) && !date.isAfter(eventEndDate)
-        } else {
-            // For all-day events, the range is exclusive of the end date
-            !date.isBefore(eventStartDate) && date.isBefore(eventEndDate)
-        }
-        return if (occurs) eventStartDateTime.toLocalDateTime() else null
-    }
-
-    // It's a recurring event
-    val seed = dtStartProp.value
-    val timezone = TimeZone.getTimeZone(systemZoneId)
-    val recurrenceIterator = rruleValue.getDateIterator(seed, timezone)
-
-    val eventDuration = duration?.value?.let { java.time.Duration.ofMillis(it.toMillis()) }
-        ?: dateEnd?.value?.let { java.time.Duration.between(dtStartProp.value.toInstant(), it.toInstant()) }
-
-    val checkStartDate = date.minusWeeks(1)
-    val checkStartDateAsDate = java.util.Date.from(checkStartDate.atStartOfDay(systemZoneId).toInstant())
-    recurrenceIterator.advanceTo(checkStartDateAsDate)
-
-    while (recurrenceIterator.hasNext()) {
-        val nextOccurrence = recurrenceIterator.next()
-        val occurrenceStartInstant = nextOccurrence.toInstant()
-        val occurrenceStartDateTime = occurrenceStartInstant.atZone(systemZoneId)
-        val occurrenceStartDate = occurrenceStartDateTime.toLocalDate()
-
-        if (occurrenceStartDate.isAfter(date.plusDays(1))) {
-            break
-        }
-
-        val occurrenceEnd: LocalDate
-        if (eventDuration != null) {
-            val occurrenceEndInstant = occurrenceStartInstant.plus(eventDuration)
-            occurrenceEnd = occurrenceEndInstant.atZone(systemZoneId).toLocalDate()
-        } else {
-            occurrenceEnd = occurrenceStartDate
-        }
-
-        // *** THIS IS THE CORRECTED LOGIC ***
-        val isInRange = if (!isAllDay) {
-            !date.isBefore(occurrenceStartDate) && !date.isAfter(occurrenceEnd)
-        } else {
-            // For recurring all-day events, the end date is exclusive.
-            // If the duration is null, it's a single day. If not, calculate the end.
-            val endForAllDay = if (eventDuration != null) occurrenceEnd else occurrenceStartDate.plusDays(1)
-            !date.isBefore(occurrenceStartDate) && date.isBefore(endForAllDay)
-        }
-
-        if (isInRange) {
-            return occurrenceStartDateTime.toLocalDateTime()
-        }
-    }
-
-    return null
-}
-
-
 @Composable
 fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
     var events by remember { mutableStateOf<List<VEvent>>(emptyList()) }
@@ -175,13 +102,12 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
     var isLoading by remember { mutableStateOf(true) }
     val context = LocalContext.current
 
-    // Check for MANAGE_EXTERNAL_STORAGE permission
-    var permissionGranted by remember {
+    // Check for permissions
+    var storagePermissionGranted by remember {
         mutableStateOf(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 Environment.isExternalStorageManager()
             } else {
-                // On older versions, the legacy permission is sufficient
                 ContextCompat.checkSelfPermission(
                     context,
                     Manifest.permission.READ_EXTERNAL_STORAGE
@@ -190,15 +116,31 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
         )
     }
 
-    // Launcher to take the user to the settings screen
+    var notificationPermissionGranted by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
+            } else {
+                true
+            }
+        )
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        notificationPermissionGranted = isGranted
+    }
+
     val settingsLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) {
-        // After returning from settings, re-check the permission
-        permissionGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        storagePermissionGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Environment.isExternalStorageManager()
         } else {
-            // This part is for older Android versions, just in case
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.READ_EXTERNAL_STORAGE
@@ -206,21 +148,26 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
         }
     }
 
-    // Function to request permission
-    fun requestPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-            intent.data = "package:${context.packageName}".toUri()
-            settingsLauncher.launch(intent)
+    fun requestPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notificationPermissionGranted) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
-        // Note: For simplicity, this example omits the logic for older permissions.
-        // The original READ_EXTERNAL_STORAGE request would go here in an 'else' block
-        // if you needed to support Android 10 and below with the same flow.
+        
+        if (!storagePermissionGranted) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                intent.data = "package:${context.packageName}".toUri()
+                settingsLauncher.launch(intent)
+            } else {
+                // For older versions, this is simplified.
+                settingsLauncher.launch(Intent(Settings.ACTION_SETTINGS))
+            }
+        }
     }
 
     // Automatically try to load the file when permission is granted
-    LaunchedEffect(permissionGranted) {
-        if (permissionGranted) {
+    LaunchedEffect(storagePermissionGranted) {
+        if (storagePermissionGranted) {
             isLoading = true
             try {
                 val documentsFolder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
@@ -241,9 +188,8 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
         }
     }
 
-    LaunchedEffect(events) {
-        if (events.isNotEmpty()) {
-            createNotificationChannel(context)
+    LaunchedEffect(events, notificationPermissionGranted) {
+        if (events.isNotEmpty() && notificationPermissionGranted) {
             val today = LocalDate.now()
             val todayEventsWithTimes = events.mapNotNull { event ->
                 event.getOccurrenceStart(today)?.let { startTime ->
@@ -266,8 +212,7 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
             ) {
                 Text(stringResource(R.string.loading), color = Color.White)
             }
-        } else if (!permissionGranted) {
-            // Show a screen to explain why the permission is needed
+        } else if (!storagePermissionGranted || !notificationPermissionGranted) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -276,12 +221,12 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    stringResource(R.string.permission_rationale),
+                    "This app needs storage and notification permissions to function correctly.",
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                Button(onClick = { requestPermission() }) {
-                    Text(stringResource(R.string.grant_permission))
+                Button(onClick = { requestPermissions() }) {
+                    Text("Grant Permissions")
                 }
             }
         } else if (selectedDate == null) {
@@ -304,13 +249,11 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
 
 @Composable
 fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit, onDateChange: (LocalDate) -> Unit) {
-    // *** Add this BackHandler to intercept the system back button press ***
     BackHandler {
         onBack()
     }
 
     val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
-    // Use getOccurrenceStart and filter out nulls
     val eventsForDay = events.mapNotNull { event ->
         event.getOccurrenceStart(date)?.let { startTime ->
             Pair(event, startTime)
@@ -320,7 +263,6 @@ fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit, onDateCha
     val (allDayEvents, timedEvents) = eventsForDay.partition { (event, _) ->
         event.dateStart?.parameters?.get("VALUE")?.contains("DATE") == true
     }
-    // Sort the timed events by their specific start time for that day
     val sortedEvents = allDayEvents.map { it.first } + timedEvents.sortedBy { it.second }.map { it.first }
 
     Column {
@@ -361,7 +303,6 @@ fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit, onDateCha
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
         ) {
             items(sortedEvents) { event ->
-                // *** Wrap the event details in a SelectionContainer ***
                 SelectionContainer {
                     Column(
                         modifier = Modifier
@@ -373,7 +314,6 @@ fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit, onDateCha
                         val location = event.location?.value
                         val isAllDay = event.dateStart?.parameters?.get("VALUE")?.contains("DATE") == true
 
-                        // --- Event Header (Time and Summary) ---
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (!isAllDay) {
                                 val eventDateTime = event.dateStart?.value?.toInstant()
@@ -394,7 +334,6 @@ fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit, onDateCha
                             }
                         }
 
-                        // --- Location (No copy button needed) ---
                         if (!location.isNullOrBlank()) {
                             Text(
                                 text = stringResource(R.string.location_label, location),
@@ -402,7 +341,6 @@ fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit, onDateCha
                             )
                         }
 
-                        // --- Description (No copy button needed) ---
                         if (!description.isNullOrBlank()) {
                             Text(
                                 text = description,
@@ -469,8 +407,6 @@ fun MonthHeader(yearMonth: YearMonth, onMonthChange: (YearMonth) -> Unit) {
 @Composable
 fun DaysOfWeek() {
     Row {
-        // DayOfWeek enum starts with MONDAY (index 0) and ends with SUNDAY (index 6).
-        // To start the week on Monday, we can just use the natural order of the enum values.
         val days = DayOfWeek.entries.toTypedArray()
 
         for (day in days) {
@@ -489,11 +425,9 @@ fun DaysOfWeek() {
 
 @Composable
 fun MonthGrid(yearMonth: YearMonth, events: List<VEvent>, onDayClick: (LocalDate) -> Unit) {
-    // Determine the start date: the Monday of the week containing the 1st of the month.
     val firstOfMonth = yearMonth.atDay(1)
     val gridStartDate = firstOfMonth.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
 
-    // Determine the end date: the Sunday of the week containing the last day of the month.
     val lastOfMonth = yearMonth.atEndOfMonth()
     val gridEndDate = lastOfMonth.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY))
 
@@ -504,22 +438,18 @@ fun MonthGrid(yearMonth: YearMonth, events: List<VEvent>, onDayClick: (LocalDate
             val date = gridStartDate.plusDays(i.toLong())
             val isToday = date.isEqual(LocalDate.now())
 
-            // Get events with their specific start times for the current day
             val eventsForDay = events.mapNotNull { event ->
                 event.getOccurrenceStart(date)?.let {
                     Pair(event, it)
                 }
             }
 
-            // Separate all-day from timed events
             val (allDayEvents, timedEvents) = eventsForDay.partition { (event, _) ->
                 event.dateStart?.parameters?.get("VALUE")?.contains("DATE") == true
             }
 
-            // Sort timed events by their start time, then combine with all-day events
             val sortedEvents = allDayEvents.map { it.first } + timedEvents.sortedBy { it.second }.map { it.first }
 
-            // Determine color for text: gray for days outside the current month
             val dayNumberColor = if (date.monthValue != yearMonth.monthValue) Color.Gray else Color.LightGray
 
             Column(
@@ -528,31 +458,28 @@ fun MonthGrid(yearMonth: YearMonth, events: List<VEvent>, onDayClick: (LocalDate
                     .border(0.5.dp, Color.LightGray)
                     .clickable { onDayClick(date) }
                     .padding(4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally // Center the day number
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Day number with highlighting for today
                 Text(
                     text = "${date.dayOfMonth}",
                     modifier = if (isToday) {
                         Modifier
                             .background(Color.LightGray, CircleShape)
-                            .padding(4.dp) // Padding inside the circle
+                            .padding(4.dp)
                     } else {
                         Modifier
                     },
-                    // Use white text for today's date to make it readable on the red background
                     color = if (isToday) Color.DarkGray else dayNumberColor,
                     fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal
                 )
 
-                // Events list
                 LazyColumn {
                     items(sortedEvents) { event ->
                         val text = event.summary?.value ?: stringResource(R.string.no_summary)
                         Text(
                             text = text,
                             maxLines = 1,
-                            color = dayNumberColor, // Event text color matches the day's month status
+                            color = dayNumberColor,
                             fontSize = 12.sp
                         )
                     }

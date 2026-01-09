@@ -17,7 +17,7 @@ fun createNotificationChannel(context: Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         val name = "Events"
         val descriptionText = "Notifications for calendar events"
-        val importance = NotificationManager.IMPORTANCE_DEFAULT
+        val importance = NotificationManager.IMPORTANCE_HIGH
         val channel = NotificationChannel("events_channel", name, importance).apply {
             description = descriptionText
         }
@@ -25,6 +25,19 @@ fun createNotificationChannel(context: Context) {
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
     }
+}
+
+fun showSimpleNotification(context: Context, title: String, text: String, id: Int = 99) {
+    createNotificationChannel(context)
+    val notification = NotificationCompat.Builder(context, "events_channel")
+        .setSmallIcon(R.mipmap.ic_launcher)
+        .setContentTitle(title)
+        .setContentText(text)
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setAutoCancel(true)
+        .build()
+    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    notificationManager.notify(id, notification)
 }
 
 fun showEventsNotification(context: Context, eventsWithTimes: List<Pair<VEvent, LocalDateTime>>) {
@@ -46,7 +59,7 @@ fun showEventsNotification(context: Context, eventsWithTimes: List<Pair<VEvent, 
         .sortedBy { it.second }
         .joinToString("\n") { (event, startTime) ->
             val summary = event.summary?.value ?: "Event"
-            val isAllDay = event.dateStart.parameters.get("VALUE")?.contains("DATE") == true
+            val isAllDay = event.dateStart?.parameters?.get("VALUE")?.contains("DATE") == true
             if (isAllDay) {
                 summary
             } else {
@@ -64,11 +77,11 @@ fun showEventsNotification(context: Context, eventsWithTimes: List<Pair<VEvent, 
     val style = NotificationCompat.BigTextStyle().bigText(detailedText)
 
     val notification = NotificationCompat.Builder(context, "events_channel")
-        .setSmallIcon(R.drawable.ic_launcher_foreground)
+        .setSmallIcon(R.mipmap.ic_launcher)
         .setContentTitle("Today's Events")
         .setContentText(contentText)
         .setStyle(style)
-        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
         .setContentIntent(pendingIntent)
         .setAutoCancel(true)
         .build()
