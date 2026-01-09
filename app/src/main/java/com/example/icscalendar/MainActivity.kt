@@ -47,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -263,7 +264,7 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
                     .background(Color.Black),
                 contentAlignment = Alignment.Center
             ) {
-                Text("Loading...", color = Color.White)
+                Text(stringResource(R.string.loading), color = Color.White)
             }
         } else if (!permissionGranted) {
             // Show a screen to explain why the permission is needed
@@ -275,12 +276,12 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    "This app needs 'All Files Access' to read the Calendar.ics file from your device's storage. Please grant the permission on the next screen.",
+                    stringResource(R.string.permission_rationale),
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(onClick = { requestPermission() }) {
-                    Text("Grant Permission")
+                    Text(stringResource(R.string.grant_permission))
                 }
             }
         } else if (selectedDate == null) {
@@ -317,7 +318,7 @@ fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit, onDateCha
     }
 
     val (allDayEvents, timedEvents) = eventsForDay.partition { (event, _) ->
-        event.dateStart.parameters.get("VALUE")?.contains("DATE") == true
+        event.dateStart?.parameters?.get("VALUE")?.contains("DATE") == true
     }
     // Sort the timed events by their specific start time for that day
     val sortedEvents = allDayEvents.map { it.first } + timedEvents.sortedBy { it.second }.map { it.first }
@@ -337,7 +338,7 @@ fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit, onDateCha
                     contentColor = Color.DarkGray
                 )
             ) {
-                Text("<")
+                Text(stringResource(R.string.previous_button))
             }
             Text(
                 text = date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG)),
@@ -352,7 +353,7 @@ fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit, onDateCha
                     contentColor = Color.DarkGray
                 )
             ) {
-                Text(">")
+                Text(stringResource(R.string.next_button))
             }
         }
         LazyColumn(
@@ -370,17 +371,19 @@ fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit, onDateCha
                         val summary = event.summary?.value
                         val description = event.description?.value
                         val location = event.location?.value
-                        val isAllDay = event.dateStart.parameters.get("VALUE")?.contains("DATE") == true
+                        val isAllDay = event.dateStart?.parameters?.get("VALUE")?.contains("DATE") == true
 
                         // --- Event Header (Time and Summary) ---
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (!isAllDay) {
-                                val eventDateTime = event.dateStart.value.toInstant()
-                                    .atZone(java.time.ZoneId.systemDefault())
-                                Text(
-                                    text = "${eventDateTime.format(timeFormatter)} ",
-                                    fontWeight = FontWeight.Bold
-                                )
+                                val eventDateTime = event.dateStart?.value?.toInstant()
+                                    ?.atZone(java.time.ZoneId.systemDefault())
+                                if (eventDateTime != null) {
+                                    Text(
+                                        text = "${eventDateTime.format(timeFormatter)} ",
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                             if (summary != null) {
                                 Text(
@@ -394,7 +397,7 @@ fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit, onDateCha
                         // --- Location (No copy button needed) ---
                         if (!location.isNullOrBlank()) {
                             Text(
-                                text = "Location: $location",
+                                text = stringResource(R.string.location_label, location),
                                 modifier = Modifier.padding(top = 4.dp)
                             )
                         }
@@ -441,7 +444,7 @@ fun MonthHeader(yearMonth: YearMonth, onMonthChange: (YearMonth) -> Unit) {
                 contentColor = Color.DarkGray
             )
         ) {
-            Text("<")
+            Text(stringResource(R.string.previous_button))
         }
         Text(
             text = "${yearMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${yearMonth.year}",
@@ -458,7 +461,7 @@ fun MonthHeader(yearMonth: YearMonth, onMonthChange: (YearMonth) -> Unit) {
                 contentColor = Color.DarkGray
             )
         ) {
-            Text(">")
+            Text(stringResource(R.string.next_button))
         }
     }
 }
@@ -510,7 +513,7 @@ fun MonthGrid(yearMonth: YearMonth, events: List<VEvent>, onDayClick: (LocalDate
 
             // Separate all-day from timed events
             val (allDayEvents, timedEvents) = eventsForDay.partition { (event, _) ->
-                event.dateStart.parameters.get("VALUE")?.contains("DATE") == true
+                event.dateStart?.parameters?.get("VALUE")?.contains("DATE") == true
             }
 
             // Sort timed events by their start time, then combine with all-day events
@@ -545,7 +548,7 @@ fun MonthGrid(yearMonth: YearMonth, events: List<VEvent>, onDayClick: (LocalDate
                 // Events list
                 LazyColumn {
                     items(sortedEvents) { event ->
-                        val text = event.summary?.value ?: "-"
+                        val text = event.summary?.value ?: stringResource(R.string.no_summary)
                         Text(
                             text = text,
                             maxLines = 1,
