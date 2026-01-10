@@ -4,36 +4,29 @@ package com.example.icscalendar
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.util.Log
 
-class BootReceiver : BroadcastReceiver() {
+class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        val action = intent?.action
-        Log.d("BootReceiver", "Received action: $action")
+        Log.d("AlarmReceiver", "Alarm triggered")
         
-        // Start the monitoring service
-        val serviceIntent = Intent(context, CalendarService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(serviceIntent)
-        } else {
-            context.startService(serviceIntent)
-        }
-
-        // Also process the file once immediately for the boot event
+        // Ensure channel exists
+        createNotificationChannel(context)
+        
+        // Show immediate debug notification
+        // showSimpleNotification(context, "ICS Calendar", "Daily update triggered", 103)
+        
+        // Direct execution using goAsync
         val pendingResult = goAsync()
         Thread {
             try {
-                if (action == Intent.ACTION_BOOT_COMPLETED || action == Intent.ACTION_LOCKED_BOOT_COMPLETED) {
-                    Thread.sleep(3000)
-                }
                 processIcsFile(context)
             } finally {
+                // Schedule next alarm
+                WorkScheduler.scheduleMidnightWork(context)
                 pendingResult.finish()
             }
         }.start()
-
-        WorkScheduler.scheduleDailyWork(context)
     }
 
     private fun processIcsFile(context: Context) {
@@ -55,12 +48,16 @@ class BootReceiver : BroadcastReceiver() {
                         
                         if (todayEventsWithTimes.isNotEmpty()) {
                             showEventsNotification(context, todayEventsWithTimes)
+                        } else {
+                            showSimpleNotification(context, "ICS Calendar", "No events for today", 102)
                         }
                     }
                 }
+            } else {
+                showSimpleNotification(context, "ICS Calendar", "Calendar.ics not found", 102)
             }
         } catch (e: Exception) {
-            Log.e("BootReceiver", "Error processing file", e)
+            Log.e("AlarmReceiver", "Error processing file", e)
         }
     }
 }

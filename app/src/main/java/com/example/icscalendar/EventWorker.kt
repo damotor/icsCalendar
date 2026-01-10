@@ -2,6 +2,8 @@
 package com.example.icscalendar
 
 import android.content.Context
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.Environment
 import android.util.Log
 import androidx.work.CoroutineWorker
@@ -19,16 +21,32 @@ class EventWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         val notification = androidx.core.app.NotificationCompat.Builder(applicationContext, "events_channel")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle("ICS Calendar")
-            .setContentText("Worker processing...")
-            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
+            .setContentText("Updating daily events...")
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+            .setOngoing(true)
             .build()
-        return ForegroundInfo(101, notification)
+        
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ForegroundInfo(101, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            ForegroundInfo(101, notification)
+        }
     }
 
     override suspend fun doWork(): Result {
         Log.d("EventWorker", "Worker started")
         
-        // If this worker was triggered as the daily midnight job, schedule the next one
+        // Show immediate debug notification to confirm the worker is running
+        showSimpleNotification(applicationContext, "ICS Calendar", "Worker started processing...", 101)
+        
+        // Attempt to run as foreground to prevent being killed during execution
+        try {
+            setForeground(getForegroundInfo())
+        } catch (e: Exception) {
+            Log.e("EventWorker", "Failed to set foreground", e)
+        }
+
+        // Reschedule for the next day if this is the midnight job
         if (tags.contains("MidnightJob")) {
             WorkScheduler.scheduleMidnightWork(applicationContext)
         }
@@ -51,15 +69,22 @@ class EventWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
                         
                         createNotificationChannel(applicationContext)
                         if (todayEventsWithTimes.isNotEmpty()) {
+                            Log.d("EventWorker", "Showing notification for ${todayEventsWithTimes.size} events")
                             showEventsNotification(applicationContext, todayEventsWithTimes)
                         } else {
                             showSimpleNotification(applicationContext, "ICS Calendar", "No events for today")
                         }
+                    } else {
+                        showSimpleNotification(applicationContext, "ICS Calendar", "Calendar file is empty")
                     }
                 }
+            } else {
+                val reason = if (!file.exists()) "File not found" else "Cannot read file"
+                showSimpleNotification(applicationContext, "ICS Calendar Error", "$reason at ${file.absolutePath}")
             }
         } catch (e: Throwable) {
             Log.e("EventWorker", "Critical error in worker", e)
+            showSimpleNotification(applicationContext, "ICS Calendar Error", "Worker failed: ${e.message}")
             return Result.retry()
         }
         return Result.success()

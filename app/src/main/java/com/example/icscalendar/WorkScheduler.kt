@@ -1,46 +1,69 @@
 // Copyright (c) 2025 Daniel Monedero-Tortola
 package com.example.icscalendar
 
+import android.app.AlarmManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.os.Build
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
-import java.time.Duration
 import java.time.LocalDateTime
 import java.time.LocalTime
-import java.util.concurrent.TimeUnit
+import java.time.ZoneId
 
 object WorkScheduler {
     private const val WORK_NAME = "EventNotificationWork"
-    private const val MIDNIGHT_WORK_NAME = "MidnightEventNotificationWork"
 
     /**
-     * Entry point to ensure the midnight schedule is set up.
+     * Entry point to ensure the daily schedule is set up.
      */
     fun scheduleDailyWork(context: Context) {
         scheduleMidnightWork(context)
     }
 
     /**
-     * Schedules a one-time worker to run at 00:01 the next day.
+     * Schedules an exact alarm to run at 00:01.
+     * Using AlarmClock info ensures it's treated as a high-priority alarm by the system.
      */
     fun scheduleMidnightWork(context: Context) {
-        val now = LocalDateTime.now()
-        // Target 00:01 of the next day
-        val nextMidnight = LocalDateTime.of(now.toLocalDate().plusDays(1), LocalTime.of(0, 1))
-        val initialDelay = Duration.between(now, nextMidnight)
-
-        val workRequest = OneTimeWorkRequestBuilder<EventWorker>()
-            .setInitialDelay(initialDelay.toMinutes(), TimeUnit.MINUTES)
-            .addTag("MidnightJob")
-            .build()
-
-        WorkManager.getInstance(context).enqueueUniqueWork(
-            MIDNIGHT_WORK_NAME,
-            ExistingWorkPolicy.REPLACE,
-            workRequest
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, AlarmReceiver::class.java)
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+
+        val now = LocalDateTime.now()
+        var nextRun = LocalDateTime.of(now.toLocalDate(), LocalTime.of(0, 1))
+        
+        if (now.isAfter(nextRun)) {
+            nextRun = nextRun.plusDays(1)
+        }
+
+        val zonedDateTime = nextRun.atZone(ZoneId.systemDefault())
+        val triggerAtMillis = zonedDateTime.toInstant().toEpochMilli()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            val alarmClockInfo = AlarmManager.AlarmClockInfo(triggerAtMillis, pendingIntent)
+            alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                triggerAtMillis,
+                pendingIntent
+            )
+        } else {
+            alarmManager.setExact(
+                AlarmManager.RTC_WAKEUP,
+                triggerAtMillis,
+                pendingIntent
+            )
+        }
     }
 
     /**
