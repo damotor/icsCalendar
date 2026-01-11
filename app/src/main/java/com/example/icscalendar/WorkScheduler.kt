@@ -27,7 +27,7 @@ object WorkScheduler {
         )
 
         val now = LocalDateTime.now()
-        var nextRun = LocalDateTime.of(now.toLocalDate(), LocalTime.of(0, 41))
+        var nextRun = LocalDateTime.of(now.toLocalDate(), LocalTime.of(0, 1))
         
         if (now.isAfter(nextRun)) {
             nextRun = nextRun.plusDays(1)
