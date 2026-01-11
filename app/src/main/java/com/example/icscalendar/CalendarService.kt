@@ -6,22 +6,26 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import biweekly.Biweekly
+import java.io.File
+import java.io.FileInputStream
+import java.time.LocalDate
 
 class CalendarService : Service() {
 
+    companion object {
+        const val ACTION_REFRESH = "com.example.icscalendar.ACTION_REFRESH"
+    }
+
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent?) {
-            val action = intent?.action
-            Log.d("CalendarService", "Received screen action: $action")
-            
-            // Trigger update on unlock or screen on
-            if (action == Intent.ACTION_USER_PRESENT || action == Intent.ACTION_SCREEN_ON) {
-                Thread {
-                    processIcsFile()
-                }.start()
-            }
+            // Trigger refresh on ANY screen activity. 
+            // This forces the notification to reappear if it was dismissed.
+            refreshEvents()
         }
     }
 
@@ -29,64 +33,76 @@ class CalendarService : Service() {
         super.onCreate()
         Log.d("CalendarService", "Service Created")
         
-        // Register for screen and unlock events dynamically
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
             addAction(Intent.ACTION_USER_PRESENT)
         }
-        registerReceiver(screenReceiver, filter)
         
-        // Promote to foreground so the system doesn't kill it
-        startForegroundService()
-    }
-
-    private fun startForegroundService() {
-        createNotificationChannel(this)
-        val notification = androidx.core.app.NotificationCompat.Builder(this, "events_channel_silent")
-            .setSmallIcon(R.drawable.icon)
-            .setContentTitle("ICS Calendar")
-            .setContentText("Monitoring calendar events")
-            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_MIN) // Low priority so it's not intrusive
-            .build()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(screenReceiver, filter)
+        }
         
-        startForeground(105, notification)
+        // Initial setup
+        updateNotification(emptyList())
+        refreshEvents()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return START_STICKY // Stay alive
+        refreshEvents()
+        return START_STICKY
+    }
+
+    private fun refreshEvents() {
+        Thread {
+            processIcsFile()
+        }.start()
     }
 
     private fun processIcsFile() {
         try {
             val documentsFolder = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS)
-            val file = java.io.File(documentsFolder, "Calendar.ics")
+            val file = File(documentsFolder, "Calendar.ics")
             
-            if (file.exists() && file.canRead()) {
-                java.io.FileInputStream(file).use { inputStream ->
-                    val iCalList = biweekly.Biweekly.parse(inputStream).all()
+            val todayEventsWithTimes = if (file.exists() && file.canRead()) {
+                FileInputStream(file).use { inputStream ->
+                    val iCalList = Biweekly.parse(inputStream).all()
                     if (iCalList.isNotEmpty()) {
                         val events = iCalList.flatMap { it.events }
-                        val today = java.time.LocalDate.now()
-                        val todayEventsWithTimes = events.mapNotNull { event ->
+                        val today = LocalDate.now()
+                        events.mapNotNull { event ->
                             event.getOccurrenceStart(today)?.let { startTime ->
                                 Pair(event, startTime)
                             }
                         }
-                        
-                        if (todayEventsWithTimes.isNotEmpty()) {
-                            showEventsNotification(this, todayEventsWithTimes)
-                        }
-                    }
+                    } else emptyList()
                 }
-            }
+            } else emptyList()
+
+            updateNotification(todayEventsWithTimes)
+            
         } catch (e: Exception) {
             Log.e("CalendarService", "Error processing file", e)
         }
     }
 
+    private fun updateNotification(events: List<Pair<biweekly.component.VEvent, java.time.LocalDateTime>>) {
+        val notification = createEventsNotification(this, events)
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(105, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            startForeground(105, notification)
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
-        unregisterReceiver(screenReceiver)
+        try {
+            unregisterReceiver(screenReceiver)
+        } catch (e: Exception) {}
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

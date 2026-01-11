@@ -9,58 +9,23 @@ import android.util.Log
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        val action = intent?.action
-        Log.d("BootReceiver", "Received action: $action")
+        val receivedAction = intent?.action
+        Log.d("BootReceiver", "Received action: $receivedAction")
         
-        // Start the monitoring service
-        val serviceIntent = Intent(context, CalendarService::class.java)
+        // Ensure channel exists
+        createNotificationChannel(context)
+        
+        // Start the monitoring service - this is now the only way to show the persistent notification
+        val serviceIntent = Intent(context, CalendarService::class.java).apply {
+            action = CalendarService.ACTION_REFRESH
+        }
+        
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(serviceIntent)
         } else {
             context.startService(serviceIntent)
         }
 
-        // Also process the file once immediately for the boot event
-        val pendingResult = goAsync()
-        Thread {
-            try {
-                if (action == Intent.ACTION_BOOT_COMPLETED || action == Intent.ACTION_LOCKED_BOOT_COMPLETED) {
-                    Thread.sleep(3000)
-                }
-                processIcsFile(context)
-            } finally {
-                pendingResult.finish()
-            }
-        }.start()
-
         WorkScheduler.scheduleDailyWork(context)
-    }
-
-    private fun processIcsFile(context: Context) {
-        try {
-            val documentsFolder = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS)
-            val file = java.io.File(documentsFolder, "Calendar.ics")
-            
-            if (file.exists() && file.canRead()) {
-                java.io.FileInputStream(file).use { inputStream ->
-                    val iCalList = biweekly.Biweekly.parse(inputStream).all()
-                    if (iCalList.isNotEmpty()) {
-                        val events = iCalList.flatMap { it.events }
-                        val today = java.time.LocalDate.now()
-                        val todayEventsWithTimes = events.mapNotNull { event ->
-                            event.getOccurrenceStart(today)?.let { startTime ->
-                                Pair(event, startTime)
-                            }
-                        }
-                        
-                        if (todayEventsWithTimes.isNotEmpty()) {
-                            showEventsNotification(context, todayEventsWithTimes)
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("BootReceiver", "Error processing file", e)
-        }
     }
 }

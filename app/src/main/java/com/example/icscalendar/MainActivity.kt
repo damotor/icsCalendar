@@ -79,6 +79,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         
         createNotificationChannel(this)
+        
+        // Start the service immediately
+        WorkScheduler.runNow(this)
         WorkScheduler.scheduleDailyWork(this)
         
         setContent {
@@ -239,15 +242,8 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
 
     LaunchedEffect(events, notificationPermissionGranted) {
         if (events.isNotEmpty() && notificationPermissionGranted) {
-            val today = LocalDate.now()
-            val todayEventsWithTimes = events.mapNotNull { event ->
-                event.getOccurrenceStart(today)?.let { startTime ->
-                    Pair(event, startTime)
-                }
-            }
-            if (todayEventsWithTimes.isNotEmpty()) {
-                showEventsNotification(context, todayEventsWithTimes)
-            }
+            // Tell the service to update its foreground notification
+            WorkScheduler.runNow(context)
         }
     }
 
