@@ -2,14 +2,12 @@
 package com.example.icscalendar
 
 import android.Manifest
-import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
-import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -135,28 +133,6 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
         )
     }
 
-    var alarmPermissionGranted by remember {
-        mutableStateOf(
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-                alarmManager.canScheduleExactAlarms()
-            } else {
-                true
-            }
-        )
-    }
-
-    var batteryOptimizationIgnored by remember {
-        mutableStateOf(
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-                powerManager.isIgnoringBatteryOptimizations(context.packageName)
-            } else {
-                true
-            }
-        )
-    }
-
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -174,20 +150,6 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
                 Manifest.permission.READ_EXTERNAL_STORAGE
             ) == PackageManager.PERMISSION_GRANTED
         }
-        
-        alarmPermissionGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            alarmManager.canScheduleExactAlarms()
-        } else {
-            true
-        }
-
-        batteryOptimizationIgnored = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-            powerManager.isIgnoringBatteryOptimizations(context.packageName)
-        } else {
-            true
-        }
     }
 
     fun requestPermissions() {
@@ -203,17 +165,6 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
             } else {
                 settingsLauncher.launch(Intent(Settings.ACTION_SETTINGS))
             }
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmPermissionGranted) {
-            val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
-            intent.data = "package:${context.packageName}".toUri()
-            settingsLauncher.launch(intent)
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !batteryOptimizationIgnored) {
-            val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-            settingsLauncher.launch(intent)
         }
     }
 
@@ -257,7 +208,7 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
             ) {
                 Text(stringResource(R.string.loading), color = Color.White)
             }
-        } else if (!storagePermissionGranted || !notificationPermissionGranted || !alarmPermissionGranted || !batteryOptimizationIgnored) {
+        } else if (!storagePermissionGranted || !notificationPermissionGranted) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -266,7 +217,7 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    "This app needs storage, notification, alarm, and background activity permissions to function correctly.",
+                    "This app needs storage and notification permissions to function correctly.",
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(16.dp))

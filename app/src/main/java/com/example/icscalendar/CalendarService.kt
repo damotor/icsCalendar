@@ -2,10 +2,8 @@
 package com.example.icscalendar
 
 import android.app.Service
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
@@ -21,31 +19,11 @@ class CalendarService : Service() {
         const val ACTION_REFRESH = "com.example.icscalendar.ACTION_REFRESH"
     }
 
-    private val screenReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent?) {
-            // Trigger refresh on ANY screen activity. 
-            // This forces the notification to reappear if it was dismissed.
-            refreshEvents()
-        }
-    }
-
     override fun onCreate() {
         super.onCreate()
         Log.d("CalendarService", "Service Created")
         
-        val filter = IntentFilter().apply {
-            addAction(Intent.ACTION_SCREEN_ON)
-            addAction(Intent.ACTION_SCREEN_OFF)
-            addAction(Intent.ACTION_USER_PRESENT)
-        }
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(screenReceiver, filter)
-        }
-        
-        // Initial setup
+        // Initial setup with empty notification to satisfy foreground requirements immediately
         updateNotification(emptyList())
         refreshEvents()
     }
@@ -57,6 +35,8 @@ class CalendarService : Service() {
 
     private fun refreshEvents() {
         Thread {
+            // Give the system time to mount storage after boot
+            Thread.sleep(5000)
             processIcsFile()
         }.start()
     }
@@ -96,13 +76,6 @@ class CalendarService : Service() {
         } else {
             startForeground(105, notification)
         }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        try {
-            unregisterReceiver(screenReceiver)
-        } catch (e: Exception) {}
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
