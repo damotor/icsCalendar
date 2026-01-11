@@ -36,7 +36,20 @@ fun createNotificationChannel(context: Context) {
     }
 }
 
-fun createEventsNotification(context: Context, eventsWithTimes: List<Pair<VEvent, LocalDateTime>>): Notification {
+private fun String.truncate(limit: Int): String {
+    return if (this.length > limit) {
+        this.substring(0, limit - 3) + "..."
+    } else {
+        this
+    }
+}
+
+fun createEventsNotification(
+    context: Context, 
+    todayEvents: List<Pair<VEvent, LocalDateTime>>,
+    tomorrowEvents: List<Pair<VEvent, LocalDateTime>>,
+    overmorrowEvents: List<Pair<VEvent, LocalDateTime>>
+): Notification {
     val intent = Intent(context, MainActivity::class.java).apply {
         putExtra("dateToShow", LocalDate.now().toString())
         flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -46,7 +59,6 @@ fun createEventsNotification(context: Context, eventsWithTimes: List<Pair<VEvent
         context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
 
-    // Delete intent to re-trigger the notification if swiped away (Android 14+ behavior)
     val deleteIntent = Intent(context, CalendarService::class.java).apply {
         action = CalendarService.ACTION_REFRESH
     }
@@ -54,47 +66,47 @@ fun createEventsNotification(context: Context, eventsWithTimes: List<Pair<VEvent
         context, 1, deleteIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
 
-    val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+    // Format title and strip any potential new lines
+    val titleRaw = "Today ${todayEvents.size} Tomorrow ${tomorrowEvents.size} Overmorrow ${overmorrowEvents.size}"
+    val title = titleRaw.truncate(64)
 
-    val detailedText = if (eventsWithTimes.isEmpty()) {
-        "No events for today"
-    } else {
-        eventsWithTimes
-            .sortedBy { it.second }
-            .joinToString("\n") { (event, startTime) ->
-                val summary = event.summary?.value ?: "Event"
-                val isAllDay = event.dateStart?.parameters?.get("VALUE")?.contains("DATE") == true
-                if (isAllDay) {
-                    summary
-                } else {
-                    val time = startTime.format(timeFormatter)
-                    "$time $summary"
-                }
-            }
+    val bodyBuilder = StringBuilder()
+    
+    // Today's section
+    bodyBuilder.append("Today ${todayEvents.size}:\n")
+    todayEvents.sortedBy { it.second }.forEach { (event, _) ->
+        val summary = event.summary?.value?.replace("\n", " ")?.replace("\r", "") ?: "No Title"
+        bodyBuilder.append(summary).append("\n")
+    }
+    
+    // Tomorrow's section
+    bodyBuilder.append("Tomorrow ${tomorrowEvents.size}:\n")
+    tomorrowEvents.sortedBy { it.second }.forEach { (event, _) ->
+        val summary = event.summary?.value?.replace("\n", " ")?.replace("\r", "") ?: "No Title"
+        bodyBuilder.append(summary).append("\n")
     }
 
-    val contentText = if (eventsWithTimes.isEmpty()) {
-        "No events for today"
-    } else if (eventsWithTimes.size == 1) {
-        detailedText
-    } else {
-        "${eventsWithTimes.size} events today"
+    // Overmorrow's section
+    bodyBuilder.append("Overmorrow ${overmorrowEvents.size}:\n")
+    overmorrowEvents.sortedBy { it.second }.forEach { (event, _) ->
+        val summary = event.summary?.value?.replace("\n", " ")?.replace("\r", "") ?: "No Title"
+        bodyBuilder.append(summary).append("\n")
     }
 
-    val style = NotificationCompat.BigTextStyle().bigText(detailedText)
+    val body = bodyBuilder.toString().trim().truncate(265)
 
     val builder = NotificationCompat.Builder(context, CHANNEL_ID)
         .setSmallIcon(R.drawable.icon)
         .setColor(ContextCompat.getColor(context, R.color.black))
-        .setContentTitle("Today's Events")
-        .setContentText(contentText)
-        .setStyle(style)
+        .setContentTitle(title)
+        .setContentText(body)
+        .setStyle(NotificationCompat.BigTextStyle().bigText(body))
         .setPriority(NotificationCompat.PRIORITY_MAX)
         .setVibrate(longArrayOf(0))
         .setSound(null)
         .setOnlyAlertOnce(false)
         .setContentIntent(pendingIntent)
-        .setDeleteIntent(deletePendingIntent) // Re-trigger if swiped
+        .setDeleteIntent(deletePendingIntent)
         .setOngoing(true) 
         .setAutoCancel(false)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)

@@ -23,8 +23,7 @@ class CalendarService : Service() {
         super.onCreate()
         Log.d("CalendarService", "Service Created")
         
-        // Initial setup with empty notification to satisfy foreground requirements immediately
-        updateNotification(emptyList())
+        updateNotification(emptyList(), emptyList(), emptyList())
         refreshEvents()
     }
 
@@ -35,7 +34,6 @@ class CalendarService : Service() {
 
     private fun refreshEvents() {
         Thread {
-            // Give the system time to mount storage after boot
             Thread.sleep(5000)
             processIcsFile()
         }.start()
@@ -46,30 +44,44 @@ class CalendarService : Service() {
             val documentsFolder = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS)
             val file = File(documentsFolder, "Calendar.ics")
             
-            val todayEventsWithTimes = if (file.exists() && file.canRead()) {
+            if (file.exists() && file.canRead()) {
                 FileInputStream(file).use { inputStream ->
                     val iCalList = Biweekly.parse(inputStream).all()
                     if (iCalList.isNotEmpty()) {
-                        val events = iCalList.flatMap { it.events }
+                        val allEvents = iCalList.flatMap { it.events }
                         val today = LocalDate.now()
-                        events.mapNotNull { event ->
-                            event.getOccurrenceStart(today)?.let { startTime ->
-                                Pair(event, startTime)
-                            }
-                        }
-                    } else emptyList()
-                }
-            } else emptyList()
+                        val tomorrow = today.plusDays(1)
+                        val overmorrow = today.plusDays(2)
 
-            updateNotification(todayEventsWithTimes)
-            
+                        val todayEvents = allEvents.mapNotNull { event ->
+                            event.getOccurrenceStart(today)?.let { Pair(event, it) }
+                        }
+                        
+                        val tomorrowEvents = allEvents.mapNotNull { event ->
+                            event.getOccurrenceStart(tomorrow)?.let { Pair(event, it) }
+                        }
+
+                        val overmorrowEvents = allEvents.mapNotNull { event ->
+                            event.getOccurrenceStart(overmorrow)?.let { Pair(event, it) }
+                        }
+
+                        updateNotification(todayEvents, tomorrowEvents, overmorrowEvents)
+                    }
+                }
+            } else {
+                updateNotification(emptyList(), emptyList(), emptyList())
+            }
         } catch (e: Exception) {
             Log.e("CalendarService", "Error processing file", e)
         }
     }
 
-    private fun updateNotification(events: List<Pair<biweekly.component.VEvent, java.time.LocalDateTime>>) {
-        val notification = createEventsNotification(this, events)
+    private fun updateNotification(
+        todayEvents: List<Pair<biweekly.component.VEvent, java.time.LocalDateTime>>,
+        tomorrowEvents: List<Pair<biweekly.component.VEvent, java.time.LocalDateTime>>,
+        overmorrowEvents: List<Pair<biweekly.component.VEvent, java.time.LocalDateTime>>
+    ) {
+        val notification = createEventsNotification(this, todayEvents, tomorrowEvents, overmorrowEvents)
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(105, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
