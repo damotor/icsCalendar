@@ -2,6 +2,7 @@
 package com.example.icscalendar
 
 import android.Manifest
+import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -133,6 +134,17 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
         )
     }
 
+    var alarmPermissionGranted by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+                alarmManager.canScheduleExactAlarms()
+            } else {
+                true
+            }
+        )
+    }
+
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -150,6 +162,13 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
                 Manifest.permission.READ_EXTERNAL_STORAGE
             ) == PackageManager.PERMISSION_GRANTED
         }
+        
+        alarmPermissionGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            alarmManager.canScheduleExactAlarms()
+        } else {
+            true
+        }
     }
 
     fun requestPermissions() {
@@ -165,6 +184,12 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
             } else {
                 settingsLauncher.launch(Intent(Settings.ACTION_SETTINGS))
             }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmPermissionGranted) {
+            val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+            intent.data = "package:${context.packageName}".toUri()
+            settingsLauncher.launch(intent)
         }
     }
 
@@ -208,7 +233,7 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
             ) {
                 Text(stringResource(R.string.loading), color = Color.White)
             }
-        } else if (!storagePermissionGranted || !notificationPermissionGranted) {
+        } else if (!storagePermissionGranted || !notificationPermissionGranted || !alarmPermissionGranted) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -217,7 +242,7 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    "This app needs storage and notification permissions to function correctly.",
+                    "This app needs storage, notification, and alarm permissions to function correctly.",
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(16.dp))

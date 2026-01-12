@@ -67,7 +67,7 @@ fun createEventsNotification(
     )
 
     // Format title and strip any potential new lines
-    val titleRaw = "Today ${todayEvents.size} Tomorrow ${tomorrowEvents.size} Overmorrow ${overmorrowEvents.size}"
+    val titleRaw = "${todayEvents.size} Today ${tomorrowEvents.size} Tomorrow ${overmorrowEvents.size} Overmorrow"
     val title = titleRaw.truncate(64)
 
     val bodyBuilder = StringBuilder()
