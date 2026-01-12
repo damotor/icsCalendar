@@ -66,34 +66,52 @@ fun createEventsNotification(
         context, 1, deleteIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
 
-    // Format title and strip any potential new lines
-    val titleRaw = "${todayEvents.size} Today ${tomorrowEvents.size} Tomorrow ${overmorrowEvents.size} Overmorrow"
-    val title = titleRaw.truncate(64)
+    var title = "No events for the next 3 days"
+    var body = ""
 
-    val bodyBuilder = StringBuilder()
-    
-    // Today's section
-    bodyBuilder.append("Today ${todayEvents.size}:\n")
-    todayEvents.sortedBy { it.second }.forEach { (event, _) ->
-        val summary = event.summary?.value?.replace("\n", " ")?.replace("\r", "") ?: "No Title"
-        bodyBuilder.append(summary).append("\n")
-    }
-    
-    // Tomorrow's section
-    bodyBuilder.append("Tomorrow ${tomorrowEvents.size}:\n")
-    tomorrowEvents.sortedBy { it.second }.forEach { (event, _) ->
-        val summary = event.summary?.value?.replace("\n", " ")?.replace("\r", "") ?: "No Title"
-        bodyBuilder.append(summary).append("\n")
-    }
+    if (todayEvents.isNotEmpty() || tomorrowEvents.isNotEmpty() || overmorrowEvents.isNotEmpty()) {
+        val titleBuilder = StringBuilder()
+        val bodyBuilder = StringBuilder()
 
-    // Overmorrow's section
-    bodyBuilder.append("Overmorrow ${overmorrowEvents.size}:\n")
-    overmorrowEvents.sortedBy { it.second }.forEach { (event, _) ->
-        val summary = event.summary?.value?.replace("\n", " ")?.replace("\r", "") ?: "No Title"
-        bodyBuilder.append(summary).append("\n")
-    }
+        // Today's section
+        if (todayEvents.isNotEmpty()) {
+            titleBuilder.append("${todayEvents.size} Today ")
 
-    val body = bodyBuilder.toString().trim().truncate(265)
+            bodyBuilder.append("${todayEvents.size} Today:\n")
+            todayEvents.sortedBy { it.second }.forEach { (event, _) ->
+                val summary =
+                    event.summary?.value?.replace("\n", " ")?.replace("\r", "") ?: "No Title"
+                bodyBuilder.append(summary).append("\n")
+            }
+        }
+
+        // Tomorrow's section
+        if (tomorrowEvents.isNotEmpty()) {
+            titleBuilder.append("${tomorrowEvents.size} Tomorrow ")
+
+            bodyBuilder.append("${tomorrowEvents.size} Tomorrow:\n")
+            tomorrowEvents.sortedBy { it.second }.forEach { (event, _) ->
+                val summary =
+                    event.summary?.value?.replace("\n", " ")?.replace("\r", "") ?: "No Title"
+                bodyBuilder.append(summary).append("\n")
+            }
+        }
+
+        // Overmorrow's section
+        if (overmorrowEvents.isNotEmpty()) {
+            titleBuilder.append("${overmorrowEvents.size} Overmorrow ")
+
+            bodyBuilder.append("${overmorrowEvents.size} Overmorrow:\n")
+            overmorrowEvents.sortedBy { it.second }.forEach { (event, _) ->
+                val summary =
+                    event.summary?.value?.replace("\n", " ")?.replace("\r", "") ?: "No Title"
+                bodyBuilder.append(summary).append("\n")
+            }
+        }
+
+        title = titleBuilder.toString().trim().truncate(64)
+        body = bodyBuilder.toString().trim().truncate(265)
+    }
 
     val builder = NotificationCompat.Builder(context, CHANNEL_ID)
         .setSmallIcon(R.drawable.icon)
