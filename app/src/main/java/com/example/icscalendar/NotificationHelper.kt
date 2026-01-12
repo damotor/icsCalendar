@@ -16,13 +16,13 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
-private const val CHANNEL_ID = "events_channel_locked_v2"
+private const val CHANNEL_ID = "events_channel_locked_v3"
 
 fun createNotificationChannel(context: Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val name = "Daily Events Summary"
-        val descriptionText = "Pinned calendar event notifications"
-        val importance = NotificationManager.IMPORTANCE_HIGH
+        val name = context.getString(R.string.notification_channel_name)
+        val descriptionText = context.getString(R.string.notification_channel_description)
+        val importance = NotificationManager.IMPORTANCE_LOW
         val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
             description = descriptionText
             enableVibration(false)
@@ -66,7 +66,7 @@ fun createEventsNotification(
         context, 1, deleteIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
 
-    var title = "No events for the next 3 days"
+    var title = context.getString(R.string.no_events_title)
     var body = ""
 
     if (todayEvents.isNotEmpty() || tomorrowEvents.isNotEmpty() || overmorrowEvents.isNotEmpty()) {
@@ -75,36 +75,36 @@ fun createEventsNotification(
 
         // Today's section
         if (todayEvents.isNotEmpty()) {
-            titleBuilder.append("${todayEvents.size} Today ")
+            titleBuilder.append(context.getString(R.string.today_title_part, todayEvents.size))
 
-            bodyBuilder.append("${todayEvents.size} Today:\n")
+            bodyBuilder.append(context.getString(R.string.today_body_header, todayEvents.size))
             todayEvents.sortedBy { it.second }.forEach { (event, _) ->
                 val summary =
-                    event.summary?.value?.replace("\n", " ")?.replace("\r", "") ?: "No Title"
+                    event.summary?.value?.replace("\n", " ")?.replace("\r", "") ?: context.getString(R.string.no_title)
                 bodyBuilder.append(summary).append("\n")
             }
         }
 
         // Tomorrow's section
         if (tomorrowEvents.isNotEmpty()) {
-            titleBuilder.append("${tomorrowEvents.size} Tomorrow ")
+            titleBuilder.append(context.getString(R.string.tomorrow_title_part, tomorrowEvents.size))
 
-            bodyBuilder.append("${tomorrowEvents.size} Tomorrow:\n")
+            bodyBuilder.append(context.getString(R.string.tomorrow_body_header, tomorrowEvents.size))
             tomorrowEvents.sortedBy { it.second }.forEach { (event, _) ->
                 val summary =
-                    event.summary?.value?.replace("\n", " ")?.replace("\r", "") ?: "No Title"
+                    event.summary?.value?.replace("\n", " ")?.replace("\r", "") ?: context.getString(R.string.no_title)
                 bodyBuilder.append(summary).append("\n")
             }
         }
 
         // Overmorrow's section
         if (overmorrowEvents.isNotEmpty()) {
-            titleBuilder.append("${overmorrowEvents.size} Overmorrow ")
+            titleBuilder.append(context.getString(R.string.overmorrow_title_part, overmorrowEvents.size))
 
-            bodyBuilder.append("${overmorrowEvents.size} Overmorrow:\n")
+            bodyBuilder.append(context.getString(R.string.overmorrow_body_header, overmorrowEvents.size))
             overmorrowEvents.sortedBy { it.second }.forEach { (event, _) ->
                 val summary =
-                    event.summary?.value?.replace("\n", " ")?.replace("\r", "") ?: "No Title"
+                    event.summary?.value?.replace("\n", " ")?.replace("\r", "") ?: context.getString(R.string.no_title)
                 bodyBuilder.append(summary).append("\n")
             }
         }
@@ -119,10 +119,10 @@ fun createEventsNotification(
         .setContentTitle(title)
         .setContentText(body)
         .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-        .setPriority(NotificationCompat.PRIORITY_MAX)
+        .setPriority(NotificationCompat.PRIORITY_LOW)
         .setVibrate(longArrayOf(0))
         .setSound(null)
-        .setOnlyAlertOnce(false)
+        .setOnlyAlertOnce(true)
         .setContentIntent(pendingIntent)
         .setDeleteIntent(deletePendingIntent)
         .setOngoing(true) 

@@ -7,4 +7,14 @@
     <string name="next_button">&gt;</string>
     <string name="location_label">Location: %1$s</string>
     <string name="no_summary">-</string>
+    <string name="notification_channel_name">Daily Events Summary</string>
+    <string name="notification_channel_description">Pinned calendar event notifications</string>
+    <string name="no_events_title">No events for the next 3 days</string>
+    <string name="no_title">No Title</string>
+    <string name="today_title_part">%1$d Today </string>
+    <string name="today_body_header">%1$d Today:\n</string>
+    <string name="tomorrow_title_part">%1$d Tomorrow </string>
+    <string name="tomorrow_body_header">%1$d Tomorrow:\n</string>
+    <string name="overmorrow_title_part">%1$d Overmorrow </string>
+    <string name="overmorrow_body_header">%1$d Overmorrow:\n</string>
 </resources>
