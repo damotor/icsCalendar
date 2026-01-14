@@ -44,6 +44,25 @@ private fun String.truncate(limit: Int): String {
     }
 }
 
+private fun appendEventsSection(
+    context: Context,
+    titleBuilder: StringBuilder,
+    bodyBuilder: StringBuilder,
+    events: List<Pair<VEvent, LocalDateTime>>,
+    titlePartResId: Int,
+    bodyHeaderResId: Int
+) {
+    if (events.isNotEmpty()) {
+        titleBuilder.append(context.getString(titlePartResId, events.size))
+        bodyBuilder.append(context.getString(bodyHeaderResId, events.size))
+        events.sortedBy { it.second }.forEach { (event, _) ->
+            val summary = event.summary?.value?.replace("\n", " ")?.replace("\r", "")
+                ?: context.getString(R.string.no_title)
+            bodyBuilder.append(summary).append("\n")
+        }
+    }
+}
+
 fun createEventsNotification(
     context: Context, 
     todayEvents: List<Pair<VEvent, LocalDateTime>>,
@@ -73,41 +92,20 @@ fun createEventsNotification(
         val titleBuilder = StringBuilder()
         val bodyBuilder = StringBuilder()
 
-        // Today's section
-        if (todayEvents.isNotEmpty()) {
-            titleBuilder.append(context.getString(R.string.today_title_part, todayEvents.size))
-
-            bodyBuilder.append(context.getString(R.string.today_body_header, todayEvents.size))
-            todayEvents.sortedBy { it.second }.forEach { (event, _) ->
-                val summary =
-                    event.summary?.value?.replace("\n", " ")?.replace("\r", "") ?: context.getString(R.string.no_title)
-                bodyBuilder.append(summary).append("\n")
-            }
-        }
-
-        // Tomorrow's section
-        if (tomorrowEvents.isNotEmpty()) {
-            titleBuilder.append(context.getString(R.string.tomorrow_title_part, tomorrowEvents.size))
-
-            bodyBuilder.append(context.getString(R.string.tomorrow_body_header, tomorrowEvents.size))
-            tomorrowEvents.sortedBy { it.second }.forEach { (event, _) ->
-                val summary =
-                    event.summary?.value?.replace("\n", " ")?.replace("\r", "") ?: context.getString(R.string.no_title)
-                bodyBuilder.append(summary).append("\n")
-            }
-        }
-
-        // Overmorrow's section
-        if (overmorrowEvents.isNotEmpty()) {
-            titleBuilder.append(context.getString(R.string.overmorrow_title_part, overmorrowEvents.size))
-
-            bodyBuilder.append(context.getString(R.string.overmorrow_body_header, overmorrowEvents.size))
-            overmorrowEvents.sortedBy { it.second }.forEach { (event, _) ->
-                val summary =
-                    event.summary?.value?.replace("\n", " ")?.replace("\r", "") ?: context.getString(R.string.no_title)
-                bodyBuilder.append(summary).append("\n")
-            }
-        }
+        appendEventsSection(
+            context, titleBuilder, bodyBuilder, todayEvents,
+            R.string.today_title_part, R.string.today_body_header
+        )
+        
+        appendEventsSection(
+            context, titleBuilder, bodyBuilder, tomorrowEvents,
+            R.string.tomorrow_title_part, R.string.tomorrow_body_header
+        )
+        
+        appendEventsSection(
+            context, titleBuilder, bodyBuilder, overmorrowEvents,
+            R.string.overmorrow_title_part, R.string.overmorrow_body_header
+        )
 
         title = titleBuilder.toString().trim().truncate(64)
         body = bodyBuilder.toString().trim().truncate(265)
