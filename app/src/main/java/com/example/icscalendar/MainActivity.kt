@@ -275,16 +275,7 @@ fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit, onDateCha
     }
 
     val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
-    val eventsForDay = events.mapNotNull { event ->
-        event.getOccurrenceStart(date)?.let { startTime ->
-            Pair(event, startTime)
-        }
-    }
-
-    val (allDayEvents, timedEvents) = eventsForDay.partition { (event, _) ->
-        event.dateStart?.parameters?.get("VALUE")?.contains("DATE") == true
-    }
-    val sortedEvents = allDayEvents.map { it.first } + timedEvents.sortedBy { it.second }.map { it.first }
+    val sortedEvents = events.getSortedEventsForDay(date)
 
     Column {
         Row(
@@ -333,12 +324,11 @@ fun DayView(date: LocalDate, events: List<VEvent>, onBack: () -> Unit, onDateCha
                         val summary = event.summary?.value
                         val description = event.description?.value
                         val location = event.location?.value
-                        val isAllDay = event.dateStart?.parameters?.get("VALUE")?.contains("DATE") == true
+                        val isAllDay = event.isAllDay()
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (!isAllDay) {
-                                val eventDateTime = event.dateStart?.value?.toInstant()
-                                    ?.atZone(java.time.ZoneId.systemDefault())
+                                val eventDateTime = event.getOccurrenceStart(date)
                                 if (eventDateTime != null) {
                                     Text(
                                         text = "${eventDateTime.format(timeFormatter)} ",
@@ -459,18 +449,7 @@ fun MonthGrid(yearMonth: YearMonth, events: List<VEvent>, onDayClick: (LocalDate
             val date = gridStartDate.plusDays(i.toLong())
             val isToday = date.isEqual(LocalDate.now())
 
-            val eventsForDay = events.mapNotNull { event ->
-                event.getOccurrenceStart(date)?.let {
-                    Pair(event, it)
-                }
-            }
-
-            val (allDayEvents, timedEvents) = eventsForDay.partition { (event, _) ->
-                event.dateStart?.parameters?.get("VALUE")?.contains("DATE") == true
-            }
-
-            val sortedEvents = allDayEvents.map { it.first } + timedEvents.sortedBy { it.second }.map { it.first }
-
+            val sortedEvents = events.getSortedEventsForDay(date)
             val dayNumberColor = if (date.monthValue != yearMonth.monthValue) Color.Gray else Color.LightGray
 
             Column(

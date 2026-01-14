@@ -45,7 +45,7 @@ object WorkScheduler {
         }
     }
 
-    fun runNow(context: Context) {
+    fun refreshEvents(context: Context) {
         val serviceIntent = Intent(context, CalendarService::class.java).apply {
             action = CalendarService.ACTION_REFRESH
         }
@@ -55,4 +55,7 @@ object WorkScheduler {
             context.startService(serviceIntent)
         }
     }
+
+    @Deprecated("Use refreshEvents(context) instead", ReplaceWith("refreshEvents(context)"))
+    fun runNow(context: Context) = refreshEvents(context)
 }

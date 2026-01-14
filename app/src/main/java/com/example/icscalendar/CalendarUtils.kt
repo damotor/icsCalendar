@@ -3,12 +3,18 @@ package com.example.icscalendar
 
 import biweekly.component.VEvent
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
 import java.util.TimeZone
 
-fun VEvent.getOccurrenceStart(date: LocalDate): java.time.LocalDateTime? {
+fun VEvent.isAllDay(): Boolean {
+    return dateStart?.parameters?.get("VALUE")?.contains("DATE") == true
+}
+
+fun VEvent.getOccurrenceStart(date: LocalDate): LocalDateTime? {
     val dtStartProp = dateStart ?: return null
-    val systemZoneId = java.time.ZoneId.systemDefault()
-    val isAllDay = dtStartProp.parameters.get("VALUE")?.contains("DATE") == true
+    val systemZoneId = ZoneId.systemDefault()
+    val isAllDay = isAllDay()
 
     val rruleValue = recurrenceRule?.value
 
@@ -75,4 +81,12 @@ fun VEvent.getOccurrenceStart(date: LocalDate): java.time.LocalDateTime? {
     }
 
     return null
+}
+
+fun List<VEvent>.getSortedEventsForDay(date: LocalDate): List<VEvent> {
+    val eventsForDay = this.mapNotNull { event ->
+        event.getOccurrenceStart(date)?.let { Pair(event, it) }
+    }
+    val (allDayEvents, timedEvents) = eventsForDay.partition { it.first.isAllDay() }
+    return allDayEvents.map { it.first } + timedEvents.sortedBy { it.second }.map { it.first }
 }
