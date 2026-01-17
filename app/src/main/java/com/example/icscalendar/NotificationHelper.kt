@@ -17,6 +17,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 private const val CHANNEL_ID = "events_channel_locked_v3"
+private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 fun createNotificationChannel(context: Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -55,10 +56,12 @@ private fun appendEventsSection(
     if (events.isNotEmpty()) {
         titleBuilder.append(context.getString(titlePartResId, events.size))
         bodyBuilder.append(context.getString(bodyHeaderResId, events.size))
-        events.sortedBy { it.second }.forEach { (event, _) ->
+        events.sortedBy { it.second }.forEach { (event, startTime) ->
             val summary = event.summary?.value?.replace("\n", " ")?.replace("\r", "")
                 ?: context.getString(R.string.no_title)
-            bodyBuilder.append(summary).append("\n")
+            
+            val timePrefix = if (event.isAllDay()) "" else "${startTime.format(timeFormatter)} "
+            bodyBuilder.append(timePrefix).append(summary).append("\n")
         }
     }
 }
