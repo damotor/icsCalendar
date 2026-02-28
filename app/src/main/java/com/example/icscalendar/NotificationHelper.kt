@@ -47,14 +47,11 @@ private fun String.truncate(limit: Int): String {
 
 private fun appendEventsSection(
     context: Context,
-    titleBuilder: StringBuilder,
     bodyBuilder: StringBuilder,
     events: List<Pair<VEvent, LocalDateTime>>,
-    titlePartResId: Int,
     bodyHeaderResId: Int
 ) {
     if (events.isNotEmpty()) {
-        titleBuilder.append(context.getString(titlePartResId, events.size))
         bodyBuilder.append(context.getString(bodyHeaderResId, events.size))
         events.sortedBy { it.second }.forEach { (event, startTime) ->
             val summary = event.summary?.value?.replace("\n", " ")?.replace("\r", "")
@@ -91,26 +88,28 @@ fun createEventsNotification(
     var title = context.getString(R.string.no_events_title)
     var body = ""
 
-    if (todayEvents.isNotEmpty() || tomorrowEvents.isNotEmpty() || overmorrowEvents.isNotEmpty()) {
-        val titleBuilder = StringBuilder()
+    val allEvents = (todayEvents + tomorrowEvents + overmorrowEvents).sortedBy { it.second }
+
+    if (allEvents.isNotEmpty()) {
+        val (firstEvent, firstStartTime) = allEvents.first()
+        val summary = firstEvent.summary?.value?.replace("\n", " ")?.replace("\r", "") ?: context.getString(R.string.no_title)
+        val timePrefix = if (firstEvent.isAllDay()) "" else "${firstStartTime.format(timeFormatter)} "
+
+        title = "$timePrefix$summary"
+
         val bodyBuilder = StringBuilder()
-
         appendEventsSection(
-            context, titleBuilder, bodyBuilder, todayEvents,
-            R.string.today_title_part, R.string.today_body_header
+            context, bodyBuilder, todayEvents,
+            R.string.today_body_header
         )
-        
         appendEventsSection(
-            context, titleBuilder, bodyBuilder, tomorrowEvents,
-            R.string.tomorrow_title_part, R.string.tomorrow_body_header
+            context, bodyBuilder, tomorrowEvents,
+            R.string.tomorrow_body_header
         )
-        
         appendEventsSection(
-            context, titleBuilder, bodyBuilder, overmorrowEvents,
-            R.string.overmorrow_title_part, R.string.overmorrow_body_header
+            context, bodyBuilder, overmorrowEvents,
+            R.string.overmorrow_body_header
         )
-
-        title = titleBuilder.toString().trim().truncate(64)
         body = bodyBuilder.toString().trim().truncate(265)
     }
 
