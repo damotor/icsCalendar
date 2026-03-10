@@ -95,7 +95,15 @@ fun createEventsNotification(
         val summary = firstEvent.summary?.value?.replace("\n", " ")?.replace("\r", "") ?: context.getString(R.string.no_title)
         val timePrefix = if (firstEvent.isAllDay()) "" else "${firstStartTime.format(timeFormatter)} "
 
-        title = "$timePrefix$summary"
+        val today = LocalDate.now()
+        val eventDate = firstStartTime.toLocalDate()
+        val dayPrefix = when (eventDate) {
+            today.plusDays(1) -> "Tomorrow: "
+            today.plusDays(2) -> "Overmorrow: "
+            else -> ""
+        }
+
+        title = "$dayPrefix$timePrefix$summary"
 
         val bodyBuilder = StringBuilder()
         appendEventsSection(

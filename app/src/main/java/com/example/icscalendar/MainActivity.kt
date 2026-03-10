@@ -80,7 +80,7 @@ class MainActivity : ComponentActivity() {
         createNotificationChannel(this)
         
         // Start the service immediately
-        WorkScheduler.runNow(this)
+        WorkScheduler.refreshEvents(this)
         WorkScheduler.scheduleDailyWork(this)
         
         setContent {
@@ -219,7 +219,7 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
     LaunchedEffect(events, notificationPermissionGranted) {
         if (events.isNotEmpty() && notificationPermissionGranted) {
             // Tell the service to update its foreground notification
-            WorkScheduler.runNow(context)
+            WorkScheduler.refreshEvents(context)
         }
     }
 
