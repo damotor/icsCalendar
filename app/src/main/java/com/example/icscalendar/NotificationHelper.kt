@@ -98,8 +98,9 @@ fun createEventsNotification(
         val today = LocalDate.now()
         val eventDate = firstStartTime.toLocalDate()
         val dayPrefix = when (eventDate) {
-            today.plusDays(1) -> "Tomorrow: "
-            today.plusDays(2) -> "Overmorrow: "
+            today -> context.getString(R.string.today_prefix)
+            today.plusDays(1) -> context.getString(R.string.tomorrow_prefix)
+            today.plusDays(2) -> context.getString(R.string.overmorrow_prefix)
             else -> ""
         }
 

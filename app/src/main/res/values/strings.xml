@@ -11,6 +11,9 @@
     <string name="notification_channel_description">Pinned calendar event notifications</string>
     <string name="no_events_title">No events for the next 3 days</string>
     <string name="no_title">No Title</string>
+    <string name="today_prefix">Today: </string>
+    <string name="tomorrow_prefix">Tomorrow: </string>
+    <string name="overmorrow_prefix">Overmorrow: </string>
     <string name="today_title_part">%1$d Today </string>
     <string name="today_body_header">%1$d Today:\n</string>
     <string name="tomorrow_title_part">%1$d Tomorrow </string>
