@@ -66,6 +66,7 @@ class CalendarService : Service() {
                         }
 
                         updateNotification(todayEvents, tomorrowEvents, overmorrowEvents)
+                        WorkScheduler.scheduleEventReminders(this, todayEvents + tomorrowEvents + overmorrowEvents)
                     }
                 }
             } else {

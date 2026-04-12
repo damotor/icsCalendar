@@ -17,10 +17,15 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 private const val CHANNEL_ID = "events_channel_locked_v3"
+private const val REMINDER_CHANNEL_ID = "event_reminders_channel"
 private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 fun createNotificationChannel(context: Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val notificationManager: NotificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        // Summary Channel
         val name = context.getString(R.string.notification_channel_name)
         val descriptionText = context.getString(R.string.notification_channel_description)
         val importance = NotificationManager.IMPORTANCE_LOW
@@ -31,9 +36,19 @@ fun createNotificationChannel(context: Context) {
             setShowBadge(true)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
-        val notificationManager: NotificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
+
+        // Reminder Channel
+        val reminderName = "Event Reminders"
+        val reminderDescription = "Notifications sent before events start"
+        val reminderImportance = NotificationManager.IMPORTANCE_DEFAULT
+        val reminderChannel = NotificationChannel(REMINDER_CHANNEL_ID, reminderName, reminderImportance).apply {
+            description = reminderDescription
+            enableVibration(true)
+            setShowBadge(true)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        }
+        notificationManager.createNotificationChannel(reminderChannel)
     }
 }
 
@@ -143,4 +158,28 @@ fun createEventsNotification(
     notification.flags = notification.flags or Notification.FLAG_NO_CLEAR or Notification.FLAG_ONGOING_EVENT
 
     return notification
+}
+
+fun createReminderNotification(
+    context: Context,
+    eventTitle: String,
+    eventTime: String
+): Notification {
+    val intent = Intent(context, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+    }
+    val pendingIntent: PendingIntent = PendingIntent.getActivity(
+        context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+
+    return NotificationCompat.Builder(context, REMINDER_CHANNEL_ID)
+        .setSmallIcon(R.drawable.icon)
+        .setContentTitle("Upcoming Event: $eventTitle")
+        .setContentText("Starts at $eventTime")
+        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        .setAutoCancel(true)
+        .setContentIntent(pendingIntent)
+        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        .setCategory(NotificationCompat.CATEGORY_EVENT)
+        .build()
 }
