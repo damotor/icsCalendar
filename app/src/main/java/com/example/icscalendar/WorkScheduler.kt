@@ -2,10 +2,12 @@
 package com.example.icscalendar
 
 import android.app.AlarmManager
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
@@ -48,23 +50,45 @@ object WorkScheduler {
         }
     }
 
+    private fun showReminder(context: Context, title: String, startTime: LocalDateTime) {
+        val timeStr = startTime.format(timeFormatter)
+        val notification = createReminderNotification(context, title, timeStr)
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationId = Math.abs((title + startTime.toString()).hashCode())
+        notificationManager.notify(notificationId, notification)
+        Log.d("WorkScheduler", "Notification displayed immediately for '$title' starting at $timeStr")
+    }
+
     fun scheduleEventReminders(context: Context, events: List<Pair<biweekly.component.VEvent, LocalDateTime>>) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val now = LocalDateTime.now()
+        val limit24h = now.plusHours(24)
+        val limit72h = now.plusDays(3)
+
+        Log.d("WorkScheduler", "Refreshing event reminders. Current time: $now")
 
         events.forEach { (event, startTime) ->
             if (event.isAllDay()) return@forEach
 
-            val reminderTime = startTime.minusHours(1)
-            if (reminderTime.isAfter(now)) {
+            val title = event.summary?.value ?: "No Title"
+            
+            // If the event is in the next 24 hours, show it immediately
+            if (startTime.isAfter(now) && startTime.isBefore(limit24h)) {
+                showReminder(context, title, startTime)
+            } 
+            // If the event is between 24h and 72h away, schedule it to appear when it's 24h away
+            else if (startTime.isAfter(limit24h) && startTime.isBefore(limit72h)) {
+                val triggerTime = startTime.minusHours(24)
+                
+                Log.d("WorkScheduler", "Scheduling future reminder for '$title' to appear at $triggerTime")
+                
                 val intent = Intent(context, AlarmReceiver::class.java).apply {
                     action = AlarmReceiver.ACTION_EVENT_REMINDER
-                    putExtra(AlarmReceiver.EXTRA_EVENT_TITLE, event.summary?.value ?: "No Title")
+                    putExtra(AlarmReceiver.EXTRA_EVENT_TITLE, title)
                     putExtra(AlarmReceiver.EXTRA_EVENT_TIME, startTime.format(timeFormatter))
                 }
                 
-                // Use a unique requestCode for each event reminder to avoid overwriting
-                val requestCode = (event.summary?.value?.hashCode() ?: 0) + startTime.hashCode()
+                val requestCode = Math.abs((title + startTime.toString()).hashCode())
                 val pendingIntent = PendingIntent.getBroadcast(
                     context,
                     requestCode,
@@ -72,12 +96,16 @@ object WorkScheduler {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
 
-                val triggerAtMillis = reminderTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                val triggerAtMillis = triggerTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-                } else {
-                    alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+                    } else {
+                        alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+                    }
+                } catch (e: SecurityException) {
+                    alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
                 }
             }
         }

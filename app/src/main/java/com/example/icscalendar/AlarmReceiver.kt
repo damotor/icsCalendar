@@ -15,17 +15,19 @@ class AlarmReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent?) {
+        Log.d("AlarmReceiver", "onReceive action: ${intent?.action}")
         when (intent?.action) {
             ACTION_EVENT_REMINDER -> {
                 val title = intent.getStringExtra(EXTRA_EVENT_TITLE) ?: "Upcoming Event"
                 val time = intent.getStringExtra(EXTRA_EVENT_TIME) ?: ""
+                Log.d("AlarmReceiver", "Received reminder for: $title at $time")
                 
                 val notification = createReminderNotification(context, title, time)
                 val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                // Use a unique ID for each reminder based on title/time hash if possible, 
-                // or just a common one if we only want one reminder at a time.
-                // For now, let's use a hash of the title to allow multiple distinct reminders.
-                notificationManager.notify(title.hashCode(), notification)
+                
+                // Ensure unique ID
+                val notificationId = Math.abs((title + time).hashCode())
+                notificationManager.notify(notificationId, notification)
             }
             else -> {
                 Log.d("AlarmReceiver", "Midnight alarm triggered")

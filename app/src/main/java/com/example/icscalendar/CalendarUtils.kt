@@ -8,7 +8,9 @@ import java.time.ZoneId
 import java.util.TimeZone
 
 fun VEvent.isAllDay(): Boolean {
-    return dateStart?.parameters?.get("VALUE")?.contains("DATE") == true
+    val dtStart = dateStart ?: return false
+    // A more robust check for all-day events in biweekly
+    return !dtStart.value.hasTime()
 }
 
 fun VEvent.getOccurrenceStart(date: LocalDate): LocalDateTime? {
@@ -23,13 +25,16 @@ fun VEvent.getOccurrenceStart(date: LocalDate): LocalDateTime? {
         val eventStartDateTime = dtStartProp.value.toInstant().atZone(systemZoneId)
         val eventStartDate = eventStartDateTime.toLocalDate()
         val dtEndProp = dateEnd
+        
         if (dtEndProp == null) {
             return if (eventStartDate == date) eventStartDateTime.toLocalDateTime() else null
         }
+        
         val eventEndDateTime = dtEndProp.value.toInstant().atZone(systemZoneId)
         val eventEndDate = eventEndDateTime.toLocalDate()
 
         val occurs = if (!isAllDay) {
+            // For timed events, we check if the requested date falls within the event's day range
             !date.isBefore(eventStartDate) && !date.isAfter(eventEndDate)
         } else {
             // For all-day events, the range is exclusive of the end date
@@ -46,6 +51,7 @@ fun VEvent.getOccurrenceStart(date: LocalDate): LocalDateTime? {
     val eventDuration = duration?.value?.let { java.time.Duration.ofMillis(it.toMillis()) }
         ?: dateEnd?.value?.let { java.time.Duration.between(dtStartProp.value.toInstant(), it.toInstant()) }
 
+    // Start checking from a week before to catch long-running events
     val checkStartDate = date.minusWeeks(1)
     val checkStartDateAsDate = java.util.Date.from(checkStartDate.atStartOfDay(systemZoneId).toInstant())
     recurrenceIterator.advanceTo(checkStartDateAsDate)
@@ -56,22 +62,23 @@ fun VEvent.getOccurrenceStart(date: LocalDate): LocalDateTime? {
         val occurrenceStartDateTime = occurrenceStartInstant.atZone(systemZoneId)
         val occurrenceStartDate = occurrenceStartDateTime.toLocalDate()
 
-        if (occurrenceStartDate.isAfter(date.plusDays(1))) {
+        // If we've passed the target date range, stop
+        if (occurrenceStartDate.isAfter(date)) {
             break
         }
 
-        val occurrenceEnd: LocalDate
+        val occurrenceEndDateTime: LocalDateTime
         if (eventDuration != null) {
-            val occurrenceEndInstant = occurrenceStartInstant.plus(eventDuration)
-            occurrenceEnd = occurrenceEndInstant.atZone(systemZoneId).toLocalDate()
+            occurrenceEndDateTime = occurrenceStartDateTime.plus(eventDuration).toLocalDateTime()
         } else {
-            occurrenceEnd = occurrenceStartDate
+            occurrenceEndDateTime = occurrenceStartDateTime.toLocalDateTime()
         }
+        val occurrenceEndDate = occurrenceEndDateTime.toLocalDate()
 
         val isInRange = if (!isAllDay) {
-            !date.isBefore(occurrenceStartDate) && !date.isAfter(occurrenceEnd)
+            !date.isBefore(occurrenceStartDate) && !date.isAfter(occurrenceEndDate)
         } else {
-            val endForAllDay = if (eventDuration != null) occurrenceEnd else occurrenceStartDate.plusDays(1)
+            val endForAllDay = if (eventDuration != null) occurrenceEndDate else occurrenceStartDate.plusDays(1)
             !date.isBefore(occurrenceStartDate) && date.isBefore(endForAllDay)
         }
 
