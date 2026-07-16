@@ -34,7 +34,6 @@ class CalendarService : Service() {
 
     private fun refreshEvents() {
         Thread {
-            Thread.sleep(5000)
             processIcsFile()
         }.start()
     }
@@ -48,21 +47,29 @@ class CalendarService : Service() {
                 FileInputStream(file).use { inputStream ->
                     val iCalList = Biweekly.parse(inputStream).all()
                     if (iCalList.isNotEmpty()) {
-                        val allEvents = iCalList.flatMap { it.events }
                         val today = LocalDate.now()
                         val tomorrow = today.plusDays(1)
                         val overmorrow = today.plusDays(2)
 
-                        val todayEvents = allEvents.mapNotNull { event ->
-                            event.getOccurrenceStart(today)?.let { Pair(event, it) }
+                        val todayEvents = iCalList.flatMap { ical ->
+                            val tzInfo = ical.timezoneInfo
+                            ical.events.mapNotNull { event ->
+                                event.getOccurrenceStart(today, tzInfo)?.let { Pair(event, it) }
+                            }
                         }
                         
-                        val tomorrowEvents = allEvents.mapNotNull { event ->
-                            event.getOccurrenceStart(tomorrow)?.let { Pair(event, it) }
+                        val tomorrowEvents = iCalList.flatMap { ical ->
+                            val tzInfo = ical.timezoneInfo
+                            ical.events.mapNotNull { event ->
+                                event.getOccurrenceStart(tomorrow, tzInfo)?.let { Pair(event, it) }
+                            }
                         }
 
-                        val overmorrowEvents = allEvents.mapNotNull { event ->
-                            event.getOccurrenceStart(overmorrow)?.let { Pair(event, it) }
+                        val overmorrowEvents = iCalList.flatMap { ical ->
+                            val tzInfo = ical.timezoneInfo
+                            ical.events.mapNotNull { event ->
+                                event.getOccurrenceStart(overmorrow, tzInfo)?.let { Pair(event, it) }
+                            }
                         }
 
                         updateNotification(todayEvents, tomorrowEvents, overmorrowEvents)
