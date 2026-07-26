@@ -68,11 +68,13 @@ private fun getEventDuration(event: VEvent, dtStartValue: java.util.Date): java.
 fun VEvent.getOccurrenceStart(date: LocalDate, timezoneInfo: TimezoneInfo? = null): LocalDateTime? {
     val dtStartProp = dateStart ?: return null
     val systemZoneId = ZoneId.systemDefault()
-    val tzid = dtStartProp.parameters.getTimezoneId()
-    val eventTimeZone = (timezoneInfo?.getTimezone(dtStartProp) ?: tzid?.let { timezoneInfo?.getTimezoneById(it) })?.timeZone 
-        ?: tzid?.let { resolveTimeZone(it) } ?: TimeZone.getTimeZone(systemZoneId.id)
-
     val dtStartValue = dtStartProp.value
+    val tzid = dtStartProp.parameters.getTimezoneId()
+    val eventTimeZone = when {
+        dtStartValue is ICalDate && dtStartValue.rawComponents?.isUtc == true -> TimeZone.getTimeZone("UTC")
+        else -> (timezoneInfo?.getTimezone(dtStartProp) ?: tzid?.let { timezoneInfo?.getTimezoneById(it) })?.timeZone
+            ?: tzid?.let { resolveTimeZone(it) } ?: TimeZone.getTimeZone(systemZoneId.id)
+    }
     val isRecurring = recurrenceRule != null
     
     if (!isRecurring) {
@@ -132,11 +134,13 @@ fun List<VEvent>.getEventsByDayInRange(startDate: LocalDate, endDate: LocalDate,
         val dtStartProp = event.dateStart ?: return@forEach
         val tzid = dtStartProp.parameters.getTimezoneId()
         
-        val eventTimeZone = timezoneInfo?.getTimezone(dtStartProp)?.timeZone 
-            ?: tzid?.let { tzMapping[it] ?: resolveTimeZone(it) } 
-            ?: TimeZone.getTimeZone(systemZoneId.id)
-
         val dtStartValue = dtStartProp.value
+        val eventTimeZone = when {
+            dtStartValue is ICalDate && dtStartValue.rawComponents?.isUtc == true -> TimeZone.getTimeZone("UTC")
+            else -> timezoneInfo?.getTimezone(dtStartProp)?.timeZone
+                ?: tzid?.let { tzMapping[it] ?: resolveTimeZone(it) }
+                ?: TimeZone.getTimeZone(systemZoneId.id)
+        }
         val isAllDay = event.isAllDay()
 
         if (event.recurrenceRule == null) {

@@ -92,4 +92,36 @@ class CalendarUtilsTest {
             TimeZone.setDefault(originalDefault)
         }
     }
+
+    @Test
+    fun testGetOccurrenceStart_UtcTime() {
+        val originalDefault = TimeZone.getDefault()
+        try {
+            // Set system timezone to PDT (UTC-7)
+            TimeZone.setDefault(TimeZone.getTimeZone("America/Los_Angeles"))
+            
+            val ics = """
+                BEGIN:VCALENDAR
+                VERSION:2.0
+                BEGIN:VEVENT
+                SUMMARY:Your Additional: Virtual - Round Robin at Palo Alto Networks
+                DTSTART:20260728T180000Z
+                DTEND:20260728T185000Z
+                END:VEVENT
+                END:VCALENDAR
+            """.trimIndent()
+
+            val ical = Biweekly.parse(ics).first()
+            val event = ical.events[0]
+            val date = LocalDate.of(2026, 7, 28)
+
+            val occurrenceStart = event.getOccurrenceStart(date, ical.timezoneInfo)
+
+            // 18:00 UTC in PDT (UTC-7) is 11:00 AM.
+            val expected = LocalDateTime.of(2026, 7, 28, 11, 0)
+            assertEquals("18:00 UTC should be 11:00 AM PDT", expected, occurrenceStart)
+        } finally {
+            TimeZone.setDefault(originalDefault)
+        }
+    }
 }
