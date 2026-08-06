@@ -208,7 +208,7 @@ fun DayView(date: LocalDate, calendar: ICalendar?, onBack: () -> Unit, onDateCha
     Column {
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp, horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Button(onClick = { onDateChange(date.minusDays(1)) }, colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray, contentColor = Color.DarkGray)) { Text(stringResource(R.string.previous_button)) }
-            Text(text = date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG)), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.clickable { onDateChange(LocalDate.now()) })
+            Text(text = date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.clickable { onDateChange(LocalDate.now()) })
             Button(onClick = { onDateChange(date.plusDays(1)) }, colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray, contentColor = Color.DarkGray)) { Text(stringResource(R.string.next_button)) }
         }
         LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)) {
