@@ -33,6 +33,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Button
@@ -194,11 +196,26 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
 @Composable
 fun DayView(date: LocalDate, calendar: ICalendar?, onBack: () -> Unit, onDateChange: (LocalDate) -> Unit) {
     BackHandler { onBack() }
-    val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
-    var sortedEvents by remember { mutableStateOf<List<VEvent>>(emptyList()) }
+    
+    val initialDate = remember { date }
+    val middlePage = Int.MAX_VALUE / 2
+    val pagerState = rememberPagerState(
+        initialPage = middlePage + ChronoUnit.DAYS.between(initialDate, date).toInt(),
+        pageCount = { Int.MAX_VALUE }
+    )
 
-    LaunchedEffect(date, calendar) {
-        sortedEvents = calendar?.events?.getSortedEventsForDay(date, calendar.timezoneInfo) ?: emptyList()
+    LaunchedEffect(pagerState.currentPage) {
+        val newDate = initialDate.plusDays((pagerState.currentPage - middlePage).toLong())
+        if (newDate != date) {
+            onDateChange(newDate)
+        }
+    }
+
+    LaunchedEffect(date) {
+        val targetPage = middlePage + ChronoUnit.DAYS.between(initialDate, date).toInt()
+        if (pagerState.currentPage != targetPage) {
+            pagerState.animateScrollToPage(targetPage)
+        }
     }
 
     Column {
@@ -207,21 +224,39 @@ fun DayView(date: LocalDate, calendar: ICalendar?, onBack: () -> Unit, onDateCha
             Text(text = date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.clickable { onDateChange(LocalDate.now()) })
             Button(onClick = { onDateChange(date.plusDays(1)) }, colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray, contentColor = Color.DarkGray)) { Text(stringResource(R.string.next_button)) }
         }
-        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)) {
-            items(sortedEvents) { event ->
-                SelectionContainer {
-                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                        val isAllDay = event.isAllDay()
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (!isAllDay) {
-                                val eventDateTime = event.getOccurrenceStart(date, calendar?.timezoneInfo)
-                                if (eventDateTime != null) Text(text = "${eventDateTime.format(timeFormatter)} ", fontWeight = FontWeight.Bold)
-                            }
-                            event.summary?.value?.let { Text(text = it, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)) }
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) { pageIndex ->
+            val pageDate = initialDate.plusDays((pageIndex - middlePage).toLong())
+            DayContent(date = pageDate, calendar = calendar)
+        }
+    }
+}
+
+@Composable
+fun DayContent(date: LocalDate, calendar: ICalendar?) {
+    val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+    var sortedEvents by remember { mutableStateOf<List<VEvent>>(emptyList()) }
+
+    LaunchedEffect(date, calendar) {
+        sortedEvents = calendar?.events?.getSortedEventsForDay(date, calendar.timezoneInfo) ?: emptyList()
+    }
+
+    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)) {
+        items(sortedEvents) { event ->
+            SelectionContainer {
+                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                    val isAllDay = event.isAllDay()
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (!isAllDay) {
+                            val eventDateTime = event.getOccurrenceStart(date, calendar?.timezoneInfo)
+                            if (eventDateTime != null) Text(text = "${eventDateTime.format(timeFormatter)} ", fontWeight = FontWeight.Bold)
                         }
-                        event.location?.value?.let { if (it.isNotBlank()) Text(text = stringResource(R.string.location_label, it), modifier = Modifier.padding(top = 4.dp)) }
-                        event.description?.value?.let { if (it.isNotBlank()) Text(text = it, modifier = Modifier.padding(top = 4.dp)) }
+                        event.summary?.value?.let { Text(text = it, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f)) }
                     }
+                    event.location?.value?.let { if (it.isNotBlank()) Text(text = stringResource(R.string.location_label, it), modifier = Modifier.padding(top = 4.dp)) }
+                    event.description?.value?.let { if (it.isNotBlank()) Text(text = it, modifier = Modifier.padding(top = 4.dp)) }
                 }
             }
         }
@@ -230,10 +265,37 @@ fun DayView(date: LocalDate, calendar: ICalendar?, onBack: () -> Unit, onDateCha
 
 @Composable
 fun CalendarView(calendar: ICalendar?, yearMonth: YearMonth, onMonthChange: (YearMonth) -> Unit, onDayClick: (LocalDate) -> Unit) {
+    val initialYearMonth = remember { yearMonth }
+    val middlePage = Int.MAX_VALUE / 2
+    val pagerState = rememberPagerState(
+        initialPage = middlePage + ChronoUnit.MONTHS.between(initialYearMonth.atDay(1), yearMonth.atDay(1)).toInt(),
+        pageCount = { Int.MAX_VALUE }
+    )
+
+    LaunchedEffect(pagerState.currentPage) {
+        val newYearMonth = initialYearMonth.plusMonths((pagerState.currentPage - middlePage).toLong())
+        if (newYearMonth != yearMonth) {
+            onMonthChange(newYearMonth)
+        }
+    }
+
+    LaunchedEffect(yearMonth) {
+        val targetPage = middlePage + ChronoUnit.MONTHS.between(initialYearMonth.atDay(1), yearMonth.atDay(1)).toInt()
+        if (pagerState.currentPage != targetPage) {
+            pagerState.animateScrollToPage(targetPage)
+        }
+    }
+
     Column {
         MonthHeader(yearMonth = yearMonth, onMonthChange = onMonthChange)
         DaysOfWeek()
-        MonthGrid(yearMonth = yearMonth, calendar = calendar, onDayClick = onDayClick)
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) { pageIndex ->
+            val pageYearMonth = initialYearMonth.plusMonths((pageIndex - middlePage).toLong())
+            MonthGrid(yearMonth = pageYearMonth, calendar = calendar, onDayClick = onDayClick)
+        }
     }
 }
 
