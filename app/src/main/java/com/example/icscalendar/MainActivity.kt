@@ -154,15 +154,13 @@ fun CalendarApp(modifier: Modifier = Modifier, intent: Intent) {
     LaunchedEffect(storagePermissionGranted) {
         if (storagePermissionGranted) {
             isLoadingFile = true
-            withContext(Dispatchers.IO) {
-                try {
-                    val file = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "Calendar.ics")
-                    if (file.exists()) {
-                        calendar = Biweekly.parse(file).first()
-                    }
-                } catch (e: Exception) { e.printStackTrace() }
-                finally { withContext(Dispatchers.Main) { isLoadingFile = false } }
-            }
+            try {
+                val file = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "Calendar.ics")
+                if (file.exists()) {
+                    calendar = parseIcsParallel(file)
+                }
+            } catch (e: Exception) { e.printStackTrace() }
+            finally { isLoadingFile = false }
         } else isLoadingFile = false
     }
 
@@ -200,9 +198,7 @@ fun DayView(date: LocalDate, calendar: ICalendar?, onBack: () -> Unit, onDateCha
     var sortedEvents by remember { mutableStateOf<List<VEvent>>(emptyList()) }
 
     LaunchedEffect(date, calendar) {
-        withContext(Dispatchers.Default) {
-            sortedEvents = calendar?.events?.getSortedEventsForDay(date, calendar.timezoneInfo) ?: emptyList()
-        }
+        sortedEvents = calendar?.events?.getSortedEventsForDay(date, calendar.timezoneInfo) ?: emptyList()
     }
 
     Column {
@@ -272,13 +268,9 @@ fun MonthGrid(yearMonth: YearMonth, calendar: ICalendar?, onDayClick: (LocalDate
     LaunchedEffect(yearMonth, calendar) {
         if (calendar == null) return@LaunchedEffect
         isCalculating = true
-        withContext(Dispatchers.Default) {
-            val result = calendar.events.getEventsByDayInRange(gridStartDate, gridEndDate, calendar.timezoneInfo)
-            withContext(Dispatchers.Main) {
-                eventsByDay = result
-                isCalculating = false
-            }
-        }
+        val result = calendar.events.getEventsByDayInRange(gridStartDate, gridEndDate, calendar.timezoneInfo)
+        eventsByDay = result
+        isCalculating = false
     }
 
     Box {

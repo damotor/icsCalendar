@@ -1,9 +1,17 @@
 // Copyright (c) 2025 Daniel Monedero-Tortola
 package com.example.icscalendar
 
+import biweekly.Biweekly
+import biweekly.ICalendar
 import biweekly.component.VEvent
 import biweekly.io.TimezoneInfo
 import biweekly.util.ICalDate
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
+import java.io.File
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -118,7 +126,32 @@ fun VEvent.getOccurrenceStart(date: LocalDate, timezoneInfo: TimezoneInfo? = nul
     return null
 }
 
-fun List<VEvent>.getEventsByDayInRange(startDate: LocalDate, endDate: LocalDate, timezoneInfo: TimezoneInfo?): Map<LocalDate, List<VEvent>> {
+suspend fun List<VEvent>.getEventsByDayInRange(startDate: LocalDate, endDate: LocalDate, timezoneInfo: TimezoneInfo?): Map<LocalDate, List<VEvent>> = coroutineScope {
+    val chunkSize = (this@getEventsByDayInRange.size / Runtime.getRuntime().availableProcessors()).coerceAtLeast(100)
+    val chunks = this@getEventsByDayInRange.chunked(chunkSize)
+    
+    val deferredResults = chunks.map { chunk ->
+        async(Dispatchers.Default) {
+            processChunk(chunk, startDate, endDate, timezoneInfo)
+        }
+    }
+
+    val results = deferredResults.awaitAll()
+    val finalMap = mutableMapOf<LocalDate, MutableList<Pair<VEvent, LocalDateTime>>>()
+    
+    results.forEach { chunkResult ->
+        chunkResult.forEach { (date, events) ->
+            finalMap.getOrPut(date) { mutableListOf() }.addAll(events)
+        }
+    }
+
+    finalMap.mapValues { entry ->
+        val (allDay, timed) = entry.value.partition { it.first.isAllDay() }
+        allDay.map { it.first } + timed.sortedBy { it.second }.map { it.first }
+    }
+}
+
+private fun processChunk(chunk: List<VEvent>, startDate: LocalDate, endDate: LocalDate, timezoneInfo: TimezoneInfo?): Map<LocalDate, List<Pair<VEvent, LocalDateTime>>> {
     val result = mutableMapOf<LocalDate, MutableList<Pair<VEvent, LocalDateTime>>>()
     val systemZoneId = ZoneId.systemDefault()
     val startBoundary = startDate.atStartOfDay(systemZoneId).toInstant()
@@ -130,7 +163,7 @@ fun List<VEvent>.getEventsByDayInRange(startDate: LocalDate, endDate: LocalDate,
         if (id != null) tzMapping[id] = assignment.timeZone
     }
 
-    this.forEach { event ->
+    chunk.forEach { event ->
         val dtStartProp = event.dateStart ?: return@forEach
         val tzid = dtStartProp.parameters.getTimezoneId()
         
@@ -144,10 +177,7 @@ fun List<VEvent>.getEventsByDayInRange(startDate: LocalDate, endDate: LocalDate,
         val isAllDay = event.isAllDay()
 
         if (event.recurrenceRule == null) {
-            // Fast skip for historical non-recurring events
             val approxStart = dtStartValue.toInstant()
-            // If the event started more than 30 days before our range, and we don't have an end date, 
-            // we assume it's short. Most events are.
             val approxEnd = event.dateEnd?.value?.toInstant() ?: approxStart.plus(java.time.Duration.ofDays(1))
             
             if (approxStart.isAfter(endBoundary.plus(java.time.Duration.ofDays(1)))) return@forEach
@@ -198,13 +228,46 @@ fun List<VEvent>.getEventsByDayInRange(startDate: LocalDate, endDate: LocalDate,
             }
         }
     }
+    return result
+}
 
-    return result.mapValues { entry ->
-        val (allDay, timed) = entry.value.partition { it.first.isAllDay() }
-        allDay.map { it.first } + timed.sortedBy { it.second }.map { it.first }
+suspend fun parseIcsParallel(file: File): ICalendar? = withContext(Dispatchers.IO) {
+    try {
+        val content = file.readText()
+        if (!content.contains("BEGIN:VEVENT")) {
+            return@withContext Biweekly.parse(content).first()
+        }
+
+        val eventDelimiter = "BEGIN:VEVENT"
+        val parts = content.split(eventDelimiter)
+        val header = parts[0]
+        val footer = "END:VCALENDAR" // Simplified assumption for splitting
+        
+        val eventBlocks = parts.drop(1).map { eventDelimiter + it }
+        
+        // Parse the header to get general calendar info (timezones, etc.)
+        val baseCalendar = Biweekly.parse(header + footer).first() ?: return@withContext null
+        
+        val batchSize = (eventBlocks.size / Runtime.getRuntime().availableProcessors()).coerceAtLeast(50)
+        val batches = eventBlocks.chunked(batchSize)
+        
+        val deferredEvents = batches.map { batch ->
+            async(Dispatchers.Default) {
+                val batchContent = "BEGIN:VCALENDAR\r\n" + batch.joinToString("") + "END:VCALENDAR"
+                Biweekly.parse(batchContent).first()?.events ?: emptyList()
+            }
+        }
+        
+        val allEvents = deferredEvents.awaitAll().flatten()
+        allEvents.forEach { baseCalendar.addEvent(it) }
+        
+        baseCalendar
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
     }
 }
 
-fun List<VEvent>.getSortedEventsForDay(date: LocalDate, timezoneInfo: TimezoneInfo? = null): List<VEvent> {
+suspend fun List<VEvent>.getSortedEventsForDay(date: LocalDate, timezoneInfo: TimezoneInfo? = null): List<VEvent> {
     return getEventsByDayInRange(date, date, timezoneInfo)[date] ?: emptyList()
 }
