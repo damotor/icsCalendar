@@ -119,7 +119,7 @@ fun createEventsNotification(
             else -> ""
         }
 
-        title = "$dayPrefix$timePrefix$summary"
+        title = "$dayPrefix $timePrefix $summary"
 
         val bodyBuilder = StringBuilder()
         appendEventsSection(
@@ -163,7 +163,8 @@ fun createEventsNotification(
 fun createReminderNotification(
     context: Context,
     eventTitle: String,
-    eventTime: String
+    eventTime: String,
+    eventStart: LocalDateTime
 ): Notification {
     val intent = Intent(context, MainActivity::class.java).apply {
         flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -172,10 +173,19 @@ fun createReminderNotification(
         context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
 
+    val today = LocalDate.now()
+    val eventDate = eventStart.toLocalDate()
+    val prefix = when (eventDate) {
+        today -> context.getString(R.string.today_prefix)
+        today.plusDays(1) -> context.getString(R.string.tomorrow_prefix)
+        today.plusDays(2) -> context.getString(R.string.overmorrow_prefix)
+        else -> "Upcoming Event: "
+    }
+
     return NotificationCompat.Builder(context, REMINDER_CHANNEL_ID)
         .setSmallIcon(R.drawable.icon)
-        .setContentTitle("Upcoming Event: $eventTitle")
-        .setContentText("Starts at $eventTime")
+        .setContentTitle("$prefix $eventTime $eventTitle")
+        .setContentText("$prefix $eventTime $eventTitle")
         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
         .setAutoCancel(true)
         .setContentIntent(pendingIntent)

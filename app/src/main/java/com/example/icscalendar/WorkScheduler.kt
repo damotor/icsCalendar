@@ -52,16 +52,52 @@ object WorkScheduler {
 
     private fun showReminder(context: Context, title: String, startTime: LocalDateTime) {
         val timeStr = startTime.format(timeFormatter)
-        val notification = createReminderNotification(context, title, timeStr)
+        val notification = createReminderNotification(context, title, timeStr, startTime)
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val notificationId = Math.abs((title + startTime.toString()).hashCode())
         notificationManager.notify(notificationId, notification)
         Log.d("WorkScheduler", "Notification displayed immediately for '$title' starting at $timeStr")
     }
 
-    fun scheduleEventReminders(context: Context, events: List<Pair<biweekly.component.VEvent, LocalDateTime>>) {
+    private fun scheduleAlarm(
+        context: Context,
+        title: String,
+        startTime: LocalDateTime,
+        triggerTime: LocalDateTime,
+        suffix: String
+    ) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            action = AlarmReceiver.ACTION_EVENT_REMINDER
+            putExtra(AlarmReceiver.EXTRA_EVENT_TITLE, title)
+            putExtra(AlarmReceiver.EXTRA_EVENT_TIME, startTime.format(timeFormatter))
+            putExtra(AlarmReceiver.EXTRA_EVENT_START, startTime.toString())
+        }
+
+        val requestCode = Math.abs((title + startTime.toString() + suffix).hashCode())
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val triggerAtMillis = triggerTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+            } else {
+                alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+            }
+        } catch (e: SecurityException) {
+            alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+        }
+    }
+
+    fun scheduleEventReminders(context: Context, events: List<Pair<biweekly.component.VEvent, LocalDateTime>>) {
         val now = LocalDateTime.now()
+        val limit1h = now.plusHours(1)
         val limit24h = now.plusHours(24)
         val limit72h = now.plusDays(3)
 
@@ -71,42 +107,19 @@ object WorkScheduler {
             if (event.isAllDay()) return@forEach
 
             val title = event.summary?.value ?: "No Title"
-            
-            // If the event is in the next 24 hours, show it immediately
+
+            // 24h Reminder: Show now if within 24h, else schedule
             if (startTime.isAfter(now) && startTime.isBefore(limit24h)) {
                 showReminder(context, title, startTime)
-            } 
-            // If the event is between 24h and 72h away, schedule it to appear when it's 24h away
-            else if (startTime.isAfter(limit24h) && startTime.isBefore(limit72h)) {
-                val triggerTime = startTime.minusHours(24)
-                
-                Log.d("WorkScheduler", "Scheduling future reminder for '$title' to appear at $triggerTime")
-                
-                val intent = Intent(context, AlarmReceiver::class.java).apply {
-                    action = AlarmReceiver.ACTION_EVENT_REMINDER
-                    putExtra(AlarmReceiver.EXTRA_EVENT_TITLE, title)
-                    putExtra(AlarmReceiver.EXTRA_EVENT_TIME, startTime.format(timeFormatter))
-                }
-                
-                val requestCode = Math.abs((title + startTime.toString()).hashCode())
-                val pendingIntent = PendingIntent.getBroadcast(
-                    context,
-                    requestCode,
-                    intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
+            } else if (startTime.isAfter(limit24h) && startTime.isBefore(limit72h)) {
+                scheduleAlarm(context, title, startTime, startTime.minusHours(24), "24h")
+            }
 
-                val triggerAtMillis = triggerTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-
-                try {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-                    } else {
-                        alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-                    }
-                } catch (e: SecurityException) {
-                    alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-                }
+            // 1h Reminder: Show now if within 1h, else schedule
+            if (startTime.isAfter(now) && startTime.isBefore(limit1h)) {
+                showReminder(context, title, startTime)
+            } else if (startTime.isAfter(limit1h) && startTime.isBefore(limit72h)) {
+                scheduleAlarm(context, title, startTime, startTime.minusHours(1), "1h")
             }
         }
     }
