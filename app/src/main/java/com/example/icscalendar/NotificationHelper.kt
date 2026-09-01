@@ -179,7 +179,7 @@ fun createReminderNotification(
         today -> context.getString(R.string.today_prefix)
         today.plusDays(1) -> context.getString(R.string.tomorrow_prefix)
         today.plusDays(2) -> context.getString(R.string.overmorrow_prefix)
-        else -> "Upcoming Event: "
+        else -> ""
     }
 
     return NotificationCompat.Builder(context, REMINDER_CHANNEL_ID)
