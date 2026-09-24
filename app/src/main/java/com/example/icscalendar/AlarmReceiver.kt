@@ -7,6 +7,9 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import java.time.LocalDateTime
+import java.time.format.TextStyle
+import java.util.Locale
+import kotlin.math.abs
 
 class AlarmReceiver : BroadcastReceiver() {
     companion object {
@@ -20,14 +23,16 @@ class AlarmReceiver : BroadcastReceiver() {
         Log.d("AlarmReceiver", "onReceive action: ${intent?.action}")
         when (intent?.action) {
             ACTION_EVENT_REMINDER -> {
-                val title = intent.getStringExtra(EXTRA_EVENT_TITLE) ?: "Upcoming Event"
                 val time = intent.getStringExtra(EXTRA_EVENT_TIME) ?: ""
                 val startStr = intent.getStringExtra(EXTRA_EVENT_START)
                 val startTime = try {
                     if (startStr != null) LocalDateTime.parse(startStr) else LocalDateTime.now()
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     LocalDateTime.now()
                 }
+                val dayOfWeek = startTime.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
+                val eventTitle = intent.getStringExtra(EXTRA_EVENT_TITLE)
+                val title = if (eventTitle.isNullOrBlank()) dayOfWeek else eventTitle
 
                 Log.d("AlarmReceiver", "Received reminder for: $title at $time (Start: $startTime)")
                 
@@ -35,7 +40,7 @@ class AlarmReceiver : BroadcastReceiver() {
                 val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 
                 // Ensure unique ID per event
-                val notificationId = Math.abs((title + startTime.toString()).hashCode())
+                val notificationId = abs((title + startTime.toString()).hashCode())
                 notificationManager.notify(notificationId, notification)
             }
             else -> {

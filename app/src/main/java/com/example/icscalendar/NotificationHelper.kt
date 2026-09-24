@@ -7,8 +7,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
-import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import biweekly.component.VEvent
@@ -21,35 +19,33 @@ private const val REMINDER_CHANNEL_ID = "event_reminders_channel"
 private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 fun createNotificationChannel(context: Context) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val notificationManager: NotificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    val notificationManager: NotificationManager =
+        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // Summary Channel
-        val name = context.getString(R.string.notification_channel_name)
-        val descriptionText = context.getString(R.string.notification_channel_description)
-        val importance = NotificationManager.IMPORTANCE_LOW
-        val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
-            description = descriptionText
-            enableVibration(false)
-            setSound(null, null)
-            setShowBadge(true)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-        }
-        notificationManager.createNotificationChannel(channel)
-
-        // Reminder Channel
-        val reminderName = "Event Reminders"
-        val reminderDescription = "Notifications sent before events start"
-        val reminderImportance = NotificationManager.IMPORTANCE_DEFAULT
-        val reminderChannel = NotificationChannel(REMINDER_CHANNEL_ID, reminderName, reminderImportance).apply {
-            description = reminderDescription
-            enableVibration(true)
-            setShowBadge(true)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-        }
-        notificationManager.createNotificationChannel(reminderChannel)
+    // Summary Channel
+    val name = context.getString(R.string.notification_channel_name)
+    val descriptionText = context.getString(R.string.notification_channel_description)
+    val importance = NotificationManager.IMPORTANCE_LOW
+    val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
+        description = descriptionText
+        enableVibration(false)
+        setSound(null, null)
+        setShowBadge(true)
+        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
     }
+    notificationManager.createNotificationChannel(channel)
+
+    // Reminder Channel
+    val reminderName = "Event Reminders"
+    val reminderDescription = "Notifications sent before events start"
+    val reminderImportance = NotificationManager.IMPORTANCE_DEFAULT
+    val reminderChannel = NotificationChannel(REMINDER_CHANNEL_ID, reminderName, reminderImportance).apply {
+        description = reminderDescription
+        enableVibration(true)
+        setShowBadge(true)
+        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+    }
+    notificationManager.createNotificationChannel(reminderChannel)
 }
 
 private fun String.truncate(limit: Int): String {

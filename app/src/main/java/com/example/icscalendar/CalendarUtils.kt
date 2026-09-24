@@ -52,7 +52,7 @@ private fun getResolvedStartInstant(dtStartValue: java.util.Date, eventTimeZone:
         return try {
             val zoneId = eventTimeZone.toZoneId()
             LocalDateTime.of(rc.year, rc.month, rc.date, rc.hour, rc.minute, rc.second).atZone(zoneId).toInstant()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             val cal = java.util.Calendar.getInstance(eventTimeZone)
             cal.set(rc.year, rc.month - 1, rc.date, rc.hour, rc.minute, rc.second)
             cal.set(java.util.Calendar.MILLISECOND, 0)
@@ -77,7 +77,7 @@ fun VEvent.getOccurrenceStart(date: LocalDate, timezoneInfo: TimezoneInfo? = nul
     val dtStartProp = dateStart ?: return null
     val systemZoneId = ZoneId.systemDefault()
     val dtStartValue = dtStartProp.value
-    val tzid = dtStartProp.parameters.getTimezoneId()
+    val tzid = dtStartProp.parameters.timezoneId
     val eventTimeZone = when {
         dtStartValue is ICalDate && dtStartValue.rawComponents?.isUtc == true -> TimeZone.getTimeZone("UTC")
         else -> (timezoneInfo?.getTimezone(dtStartProp) ?: tzid?.let { timezoneInfo?.getTimezoneById(it) })?.timeZone
@@ -165,7 +165,7 @@ private fun processChunk(chunk: List<VEvent>, startDate: LocalDate, endDate: Loc
 
     chunk.forEach { event ->
         val dtStartProp = event.dateStart ?: return@forEach
-        val tzid = dtStartProp.parameters.getTimezoneId()
+        val tzid = dtStartProp.parameters.timezoneId
         
         val dtStartValue = dtStartProp.value
         val eventTimeZone = when {

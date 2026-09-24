@@ -19,12 +19,8 @@ class BootReceiver : BroadcastReceiver() {
         val serviceIntent = Intent(context, CalendarService::class.java).apply {
             action = CalendarService.ACTION_REFRESH
         }
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(serviceIntent)
-        } else {
-            context.startService(serviceIntent)
-        }
+
+        context.startForegroundService(serviceIntent)
 
         WorkScheduler.scheduleDailyWork(context)
     }
